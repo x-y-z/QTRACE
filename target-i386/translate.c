@@ -121,6 +121,7 @@ typedef struct DisasContext {
     int cpuid_ext2_features;
     int cpuid_ext3_features;
     int cpuid_7_0_ebx_features;
+    unsigned qtrace_insnflags;
 } DisasContext;
 
 static void gen_eob(DisasContext *s);
@@ -5208,6 +5209,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_inc(s, ot, opreg, -1);
             break;
         case 2: /* call Ev */
+            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_CALL);
             /* XXX: optimize if memory (no 'and' is necessary) */
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
@@ -5238,6 +5240,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_eob(s);
             break;
         case 4: /* jmp Ev */
+            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_JMP);
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
             gen_op_jmp_T0();

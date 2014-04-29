@@ -22,6 +22,7 @@
 #include "tcg.h"
 #include "qemu/atomic.h"
 #include "sysemu/qtest.h"
+#include "qemu-adebug.h"
 
 bool qemu_cpu_has_work(CPUState *cpu)
 {
@@ -49,6 +50,16 @@ void cpu_resume_from_signal(CPUArchState *env, void *puc)
 }
 #endif
 
+
+/* asynchronous debug channel */
+extern DebugChannel *adebug;
+static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu) 
+{
+   /* flush code cache */
+   if (adebug->flushcc) tb_flush(cpu);
+   adebug->flushcc = 0;
+}
+
 /* Execute a TB, and fix up the CPU state afterwards if necessary */
 static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, uint8_t *tb_ptr)
 {
@@ -74,6 +85,7 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, uint8_t *tb_ptr)
          */
         cpu->tcg_exit_req = 0;
     }
+
     return next_tb;
 }
 
@@ -198,6 +210,7 @@ static void cpu_handle_debug_exception(CPUArchState *env)
 /* main execution loop */
 
 volatile sig_atomic_t exit_request;
+
 
 int cpu_exec(CPUArchState *env)
 {
@@ -595,6 +608,10 @@ int cpu_exec(CPUArchState *env)
 #endif
                 }
 #endif /* DEBUG_DISAS */
+
+                /* handle QTRACE commands */
+                qtrace_cpu_handle_cmds(env);
+
                 spin_lock(&tcg_ctx.tb_ctx.tb_lock);
                 tb = tb_find_fast(env);
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when

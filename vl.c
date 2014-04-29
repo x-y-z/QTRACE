@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <zlib.h>
 #include "qemu/bitmap.h"
+#include "qemu-adebug.h"
 
 /* Needed early for CONFIG_BSD etc. */
 #include "config-host.h"
@@ -48,6 +49,7 @@
 #include <dirent.h>
 #include <netdb.h>
 #include <sys/select.h>
+#include <sys/shm.h>
 
 #ifdef CONFIG_BSD
 #include <sys/stat.h>
@@ -236,6 +238,9 @@ bool boot_strict;
 uint8_t *boot_splash_filedata;
 size_t boot_splash_filedata_size;
 uint8_t qemu_extra_params_fw[2];
+
+/* asynchrounous debug channel for QTRACE */
+DebugChannel *adebug;
 
 typedef struct FWBootEntry FWBootEntry;
 
@@ -1450,6 +1455,28 @@ static void configure_realtime(QemuOpts *opts)
 static void configure_msg(QemuOpts *opts)
 {
     enable_timestamp_msg = qemu_opt_get_bool(opts, "timestamp", true);
+}
+
+
+/***********************************************************/
+/* qemu asynchrounous dump tool */
+static void initialize_adebug(void)
+{
+   /* allocate a piece of shared memory */
+   int shared_id = shmget(SHARED_MEM_KEY, // a shared key.
+                          sizeof(DebugChannel), // size of debug channel.
+                          IPC_CREAT |     // Create the segment if it doesn't exist.
+                          S_IRUSR   |     // Owner read permission.
+                          S_IWUSR);       // Owner write permission.
+
+   adebug = (DebugChannel*)shmat(shared_id, NULL, 0);
+   assert(adebug);
+   printf("create channel with key %d\n", SHARED_MEM_KEY);
+}
+
+static void adebug_free()
+{
+   /* XIN. implement me */
 }
 
 /***********************************************************/
@@ -4369,10 +4396,13 @@ int main(int argc, char **argv, char **envp)
 
     os_setup_post();
 
+    initialize_adebug();
+
     main_loop();
     bdrv_close_all();
     pause_all_vcpus();
     res_free();
+    adebug_free();
 #ifdef CONFIG_TPM
     tpm_cleanup();
 #endif

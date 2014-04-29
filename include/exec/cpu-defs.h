@@ -167,9 +167,9 @@ typedef struct CPUWatchpoint {
                                                                         \
     /* from this point: preserved by CPU reset */                       \
     /* ice debug support */                                             \
-    QTAILQ_HEAD(breakpoints_head, CPUBreakpoint) breakpoints;            \
+    QTAILQ_HEAD(breakpoints_head, CPUBreakpoint) breakpoints;           \
                                                                         \
-    QTAILQ_HEAD(watchpoints_head, CPUWatchpoint) watchpoints;            \
+    QTAILQ_HEAD(watchpoints_head, CPUWatchpoint) watchpoints;           \
     CPUWatchpoint *watchpoint_hit;                                      \
                                                                         \
     /* Core interrupt code */                                           \
@@ -178,5 +178,8 @@ typedef struct CPUWatchpoint {
                                                                         \
     /* user data */                                                     \
     void *opaque;                                                       \
+                                                                        \
+    /* current instruction flag */                                      \
+    unsigned qtrace_instflags;                                          \
 
 #endif
