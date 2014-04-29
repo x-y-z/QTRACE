@@ -22,6 +22,9 @@
 #include "cpu.h"
 #include "qtrace.h"
 
+InstructionRtn* icb_head = NULL;
+IBasicBlockRtn* ibb_head = NULL;
+
 static const char* icb = "InstructionCallBack"; 
 static const char* bcb = "BasicBlockCallBack"; 
 static void* handle = NULL;
@@ -34,15 +37,43 @@ static inline void handle_unable_load_module(const char *optarg)
 
 static void register_instruction_cb(INSTRUCTIONCB cb)
 {
-   printf("cb at address 0x%lx\n", (long int)cb);
+   /* it is possible that this module does not define a instruction callback */
+   if (!cb) return;
+
+   InstructionRtn *head = icb_head;
+   if (!icb_head) head = icb_head = malloc(sizeof(InstructionRtn));
+   else 
+   {
+     /* get to the end of the linkedlist */
+     while(head->next) head = head->next;
+     head->next = malloc(sizeof(InstructionRtn));
+     head = head->next;
+   }
+   /* register the callback */
+   head->rtn  = cb;
+   head->next = NULL;
 }
 
 static void register_ibasicblock_cb(BASICBLOCKCB cb)
 {
-   printf("cb at address 0x%lx\n", (long int)cb);
+   /* it is possible that this module does not define a basicblock callback */
+   if (!cb) return;
+
+   IBasicBlockRtn *head = ibb_head;
+   if (!ibb_head) head = ibb_head = malloc(sizeof(IBasicBlockRtn));
+   else 
+   {
+     /* get to the end of the linkedlist */
+     while(head->next) head = head->next;
+     head->next = malloc(sizeof(IBasicBlockRtn));
+     head = head->next;
+   }
+   /* register the callback */
+   head->rtn  = cb;
+   head->next = NULL;
 }
 
-int qtrace_instrument_parse(const char *module)
+void qtrace_instrument_parse(const char *module)
 {
    /* load the instrumentation module */
    if (!(handle=dlopen(optarg, RTLD_LAZY))) handle_unable_load_module(optarg);
@@ -51,7 +82,6 @@ int qtrace_instrument_parse(const char *module)
    register_instruction_cb((INSTRUCTIONCB)dlsym(handle, icb));
    register_ibasicblock_cb((INSTRUCTIONCB)dlsym(handle, bcb));
    /* done */
-   return 0;
 }
 
 
