@@ -602,19 +602,7 @@ typedef uint32_t FeatureWordArray[FEATURE_WORDS];
 #define CPU_INTERRUPT_SIPI      CPU_INTERRUPT_TGT_INT_2
 #define CPU_INTERRUPT_TPR       CPU_INTERRUPT_TGT_INT_3
 
-#define QTRACE_IS_FETCH   (1<<0)
-#define QTRACE_IS_STORE   (1<<1)
-#define QTRACE_IS_JMP     (1<<2)
-#define QTRACE_IS_CALL    (1<<3)
-#define QTRACE_IS_BRANCH  (1<<4)
-#define QTRACE_IS_COND    (1<<5)
-
-#define QTRACE_TEST_FETCH(X)   (X&QTRACE_IS_FETCH)
-#define QTRACE_TEST_STORE(X)   (X&QTRACE_IS_STORE)
-#define QTRACE_TEST_JMP(X)     (X&QTRACE_IS_JMP)
-#define QTRACE_TEST_CALL(X)    (X&QTRACE_IS_CALL)
-#define QTRACE_TEST_COND(X)    (X&QTRACE_IS_COND)
-#define QTRACE_TEST_BRANCH(X)  (X&QTRACE_IS_BRANCH)
+#include "qtrace.h"
 
 #define QTRACE_ADD_FLAG(s,flag) s->qtrace_insnflags|=(flag);
 
