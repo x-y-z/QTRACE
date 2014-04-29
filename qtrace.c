@@ -19,11 +19,12 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
-#include "qtrace.h"
 #include "cpu.h"
+#include "qtrace.h"
 
 static const char* icb = "InstructionCallBack"; 
 static const char* bcb = "BasicBlockCallBack"; 
+static void* handle = NULL;
 
 static inline void handle_unable_load_module(const char *optarg)
 {
@@ -31,24 +32,26 @@ static inline void handle_unable_load_module(const char *optarg)
    QTRACE_EXIT(-1);
 }
 
-static void register_instruction_callback(INSTRUCTIONCB *cb)
+static void register_instruction_cb(INSTRUCTIONCB cb)
 {
-   printf("cb at address 0x%lx\n", cb);
+   printf("cb at address 0x%lx\n", (long int)cb);
 }
 
-static void register_basicblock_callback(BASICBLOCKCB *cb)
+static void register_ibasicblock_cb(BASICBLOCKCB cb)
 {
-   printf("cb at address 0x%lx\n", cb);
+   printf("cb at address 0x%lx\n", (long int)cb);
 }
 
-int qtrace_instrument_parse(QemuOptsList *opts_list, const char *optarg)
+int qtrace_instrument_parse(const char *module)
 {
-   void* handle = dlopen(optarg, RTLD_LAZY);
-   if (!handle) 
-        handle_unable_load_module(optarg);
+   /* load the instrumentation module */
+   if (!(handle=dlopen(optarg, RTLD_LAZY))) handle_unable_load_module(optarg);
 
-   register_instruction_callback((INSTRUCTIONCB)dlsym(handle, icb));
-   register_basicblock_callback((INSTRUCTIONCB)dlsym(handle, bcb));
+   /* register the runtime instrumentation functions */
+   register_instruction_cb((INSTRUCTIONCB)dlsym(handle, icb));
+   register_ibasicblock_cb((INSTRUCTIONCB)dlsym(handle, bcb));
+   /* done */
+   return 0;
 }
 
 

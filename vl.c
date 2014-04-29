@@ -1474,10 +1474,7 @@ static void initialize_adebug(void)
    printf("create channel with key %d\n", SHARED_MEM_KEY);
 }
 
-static void adebug_free()
-{
-   /* XIN. implement me */
-}
+static void adebug_free(void ) {  shmdt(adebug);  }
 
 /***********************************************************/
 /* USB devices */
@@ -3021,6 +3018,10 @@ int main(int argc, char **argv, char **envp)
                     drive_add(IF_DEFAULT, 0, optarg, buf);
                     break;
                 }
+            case QEMU_OPTION_instrument:
+                /* QTRACE module */
+                qtrace_instrument_parse(optarg);
+                break;
             case QEMU_OPTION_hdb:
             case QEMU_OPTION_hdc:
             case QEMU_OPTION_hdd:
@@ -3166,11 +3167,6 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_net:
                 if (net_client_parse(qemu_find_opts("net"), optarg) == -1) {
-                    exit(1);
-                }
-                break;
-            case QEMU_OPTION_instrument:
-                if (qtrace_instrument_parse(qemu_find_opts("instrument"), optarg) == -1) {
                     exit(1);
                 }
                 break;

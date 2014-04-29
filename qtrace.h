@@ -20,7 +20,6 @@
 #ifndef QTRACE_H
 #define QTRACE_H
 
-
 #define QTRACE_EXIT  exit
 #define QTRACE_ERROR printf
 #define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
@@ -46,5 +45,6 @@
 typedef void (*INSTRUCTIONCB)(unsigned);
 typedef void (*BASICBLOCKCB)(unsigned);
 
+int qtrace_instrument_parse(const char *module);
 #endif /* QTRACE_H */
 

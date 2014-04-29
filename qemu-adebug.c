@@ -36,10 +36,7 @@ static inline DebugChannel* connect(void) {
   return (DebugChannel*)shmat(shared_id, 0, 0);
 }
 
-
-static inline void disconnect(DebugChannel *channel) {
-   /* XIN. implement me */
-}
+static inline void disconnect(DebugChannel *channel) { shmdt(channel); }
 
 /// --------------------------------------------
 /* handle commands */ 
