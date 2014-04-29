@@ -1,6 +1,6 @@
 #include "qtrace.h"
 
-void InstructionCB(unsigned type)
+void InstructionCallBack(unsigned type)
 {
   QTRACE_TEST_FETCH(type);
 }

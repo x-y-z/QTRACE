@@ -3010,6 +3010,15 @@ Write device configuration to @var{file}. The @var{file} can be either filename 
 command line and device configuration into file or dash @code{-}) character to print the
 output to stdout. This can be later used as input file for @code{-readconfig} option.
 ETEXI
+
+DEF("instrument", HAS_ARG, QEMU_OPTION_instrument,
+    "-instrument module_name\n", QEMU_ARCH_ALL)
+STEXI
+@item -instrument @var{file}
+@findex -instrument
+Load a instrumentation module
+ETEXI
+
 DEF("nodefconfig", 0, QEMU_OPTION_nodefconfig,
     "-nodefconfig\n"
     "                do not load default config files at startup\n",

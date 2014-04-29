@@ -20,12 +20,9 @@
 #ifndef QEMU_ADEBUG_H
 #define QEMU_ADEBUG_H
 
-#define QTRACE_EXIT  exit
-#define QTRACE_ERROR printf
-#define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
+#include "qtrace.h"
+
 #define SHARED_MEM_KEY 154519
-
-
 typedef struct {
   int reset;
   int flushcc;

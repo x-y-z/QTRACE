@@ -3169,6 +3169,11 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
+            case QEMU_OPTION_instrument:
+                if (qtrace_instrument_parse(qemu_find_opts("instrument"), optarg) == -1) {
+                    exit(1);
+                }
+                break;
 #ifdef CONFIG_LIBISCSI
             case QEMU_OPTION_iscsi:
                 opts = qemu_opts_parse(qemu_find_opts("iscsi"), optarg, 0);
