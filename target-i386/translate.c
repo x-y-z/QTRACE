@@ -8290,6 +8290,7 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
     target_ulong cs_base;
     int num_insns;
     int max_insns;
+    bool is_kern, is_user;
 
     /* generate intermediate code */
     pc_start = tb->pc;
@@ -8386,6 +8387,15 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         }
         if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
             gen_io_start();
+
+        /* QTRACE. is this a user or kernel level instruction */
+        is_kern = (dc->cpl == 0);
+        is_user = (dc->cpl >  0);
+        if (is_kern) QTRACE_ADD_FLAG(dc, QTRACE_IS_KERN);
+        if (is_user) QTRACE_ADD_FLAG(dc, QTRACE_IS_USER);
+
+        /* call instruction instrumentation routine */
+        qtrace_invoke_instruction_callback(dc->qtrace_insnflags);
 
         pc_ptr = disas_insn(env, dc, pc_ptr);
         num_insns++;

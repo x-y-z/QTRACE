@@ -40,6 +40,7 @@ static void register_instruction_cb(INSTRUCTIONCB cb)
    /* it is possible that this module does not define a instruction callback */
    if (!cb) return;
 
+   printf("register InstructionCallBack\n");
    InstructionRtn *head = icb_head;
    if (!icb_head) head = icb_head = malloc(sizeof(InstructionRtn));
    else 
@@ -75,14 +76,30 @@ static void register_ibasicblock_cb(BASICBLOCKCB cb)
 
 void qtrace_instrument_parse(const char *module)
 {
+   printf("module name is %s\n", module);
    /* load the instrumentation module */
-   if (!(handle=dlopen(optarg, RTLD_LAZY))) handle_unable_load_module(optarg);
+   if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
    /* register the runtime instrumentation functions */
    register_instruction_cb((INSTRUCTIONCB)dlsym(handle, icb));
-   register_ibasicblock_cb((INSTRUCTIONCB)dlsym(handle, bcb));
+   register_ibasicblock_cb((BASICBLOCKCB)dlsym(handle, bcb));
    /* done */
 }
+
+/* invoke all the instruction callbacks */
+void qtrace_invoke_instruction_callback(unsigned arg0)
+{
+    InstructionRtn* curr_icc = icb_head;
+    while(curr_icc) 
+    {
+       assert(curr_icc->rtn);
+       curr_icc->rtn(arg0);
+       curr_icc = curr_icc->next;
+    } 
+    return;
+}
+
+
 
 
 

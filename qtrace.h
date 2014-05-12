@@ -23,7 +23,8 @@
 /// ------------------------------------------------ ///
 /// instrumentation function list
 /// ------------------------------------------------ ///
-void qtrace_instrument_parse(const char *);
+void qtrace_instrument_parse(const char*);
+void qtrace_invoke_instruction_callback(unsigned arg0);
 typedef void (*INSTRUCTIONCB)(unsigned);
 typedef void (*BASICBLOCKCB)(unsigned);
 
@@ -57,7 +58,7 @@ extern IBasicBlockRtn* ibb_head;
 #define QTRACE_IS_BRANCH  (1<<4)
 #define QTRACE_IS_COND    (1<<5)
 #define QTRACE_IS_USER    (1<<6)
-#define QTRACE_IS_KERNEL  (1<<7)
+#define QTRACE_IS_KERN    (1<<7)
 
 #define QTRACE_TEST_FETCH(X)   (X&QTRACE_IS_FETCH)
 #define QTRACE_TEST_STORE(X)   (X&QTRACE_IS_STORE)
@@ -66,8 +67,7 @@ extern IBasicBlockRtn* ibb_head;
 #define QTRACE_TEST_COND(X)    (X&QTRACE_IS_COND)
 #define QTRACE_TEST_BRANCH(X)  (X&QTRACE_IS_BRANCH)
 #define QTRACE_TEST_USER(X)    (X&QTRACE_IS_USER)
-#define QTRACE_TEST_KERNEL(X)  (X&QTRACE_IS_KERNEL)
-
+#define QTRACE_TEST_KERN(X)    (X&QTRACE_IS_KERN)
 
 #endif /* QTRACE_H */
 
