@@ -1,15 +1,16 @@
 #include "qtrace.h"
 #include <stdio.h>
 
+#define PRINT_FREQ 100000
+
 static int usercount = 0;
 static int kerncount = 0;
 static int totlcount = 0;
 
 void InstructionCallBack(unsigned type)
 {
+    printf("hello\n");
     totlcount ++;
-    usercount += QTRACE_TEST_USER(type);
-    kerncount += QTRACE_TEST_KERN(type);
-
-    if (totlcount % 1000000 == 0) printf("user:%d kern:%d\n", usercount, kerncount);
+    usercount += QTRACE_TEST_INVLPGA(type);
+    if (totlcount % PRINT_FREQ == 0) printf("totalcount is %d QTRACE_TEST_INVLPGA:%d kern:%d\n", totlcount, usercount);
 }

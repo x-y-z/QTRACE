@@ -75,6 +75,13 @@ static TCGv_i64 cpu_tmp1_i64;
 
 static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
+/* instruction parsed. call the instrumentation routine */
+#define QTRACE_FLAGS_DONE(s)                           do {  \
+   /* call instruction instrumentation routine */            \
+   qtrace_invoke_instruction_callback(s->qtrace_insnflags);  \
+   s->qtrace_insncallback = true;                            \
+} while(0);
+
 #include "exec/gen-icount.h"
 
 #ifdef TARGET_X86_64
@@ -122,6 +129,7 @@ typedef struct DisasContext {
     int cpuid_ext3_features;
     int cpuid_7_0_ebx_features;
     unsigned qtrace_insnflags;
+    unsigned qtrace_insncallback;
 } DisasContext;
 
 static void gen_eob(DisasContext *s);
@@ -4850,6 +4858,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x30 ... 0x35:
     case 0x38 ... 0x3d:
         {
+            QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+            QTRACE_FLAGS_DONE(s);
             int op, f, val;
             op = (b >> 3) & 7;
             f = (b >> 1) & 3;
@@ -4912,6 +4922,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x81:
     case 0x83:
         {
+            QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+            QTRACE_FLAGS_DONE(s);
             int val;
 
             if ((b & 1) == 0)
@@ -4954,15 +4966,21 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /**************************/
         /* inc, dec, and other misc arith */
     case 0x40 ... 0x47: /* inc Gv */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_FLAGS_DONE(s);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), 1);
         break;
     case 0x48 ... 0x4f: /* dec Gv */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_FLAGS_DONE(s);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), -1);
         break;
     case 0xf6: /* GRP3 */
     case 0xf7:
+        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_FLAGS_DONE(s);
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -6825,6 +6843,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0xe8: /* call im */
         {
+            QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
+            QTRACE_FLAGS_DONE(s);
             if (dflag)
                 tval = (int32_t)insn_get(env, s, OT_LONG);
             else
@@ -6842,6 +6862,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x9a: /* lcall im */
         {
+            QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
+            QTRACE_FLAGS_DONE(s);
             unsigned int selector, offset;
 
             if (CODE64(s))
@@ -7220,6 +7242,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /************************/
         /* misc */
     case 0x90: /* nop */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
+        QTRACE_FLAGS_DONE(s);
         /* XXX: correct lock test for all insn */
         if (prefixes & PREFIX_LOCK) {
             goto illegal_op;
@@ -7415,6 +7439,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x131: /* rdtsc */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_RDTSC);
+        QTRACE_FLAGS_DONE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         if (use_icount)
@@ -7431,6 +7457,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_helper_rdpmc(cpu_env);
         break;
     case 0x134: /* sysenter */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSENTER);
+        QTRACE_FLAGS_DONE(s);
         /* For Intel SYSENTER is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
             goto illegal_op;
@@ -7444,6 +7472,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x135: /* sysexit */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSEXIT);
+        QTRACE_FLAGS_DONE(s);
         /* For Intel SYSEXIT is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
             goto illegal_op;
@@ -7459,12 +7489,16 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 #ifdef TARGET_X86_64
     case 0x105: /* syscall */
         /* XXX: is it usable in real mode ? */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSCALL);
+        QTRACE_FLAGS_DONE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         gen_helper_syscall(cpu_env, tcg_const_i32(s->pc - pc_start));
         gen_eob(s);
         break;
     case 0x107: /* sysret */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSRET);
+        QTRACE_FLAGS_DONE(s);
         if (!s->pe) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -7480,11 +7514,15 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
 #endif
     case 0x1a2: /* cpuid */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_CPUID);
+        QTRACE_FLAGS_DONE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         gen_helper_cpuid(cpu_env);
         break;
     case 0xf4: /* hlt */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_HLT);
+        QTRACE_FLAGS_DONE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -7585,6 +7623,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             if (mod == 3) {
                 switch (rm) {
                 case 0: /* monitor */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_MONITOR);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
                         goto illegal_op;
@@ -7604,6 +7644,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     gen_helper_monitor(cpu_env, cpu_A0);
                     break;
                 case 1: /* mwait */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_MWAIT);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
                         goto illegal_op;
@@ -7652,6 +7694,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_jmp_im(pc_start - s->cs_base);
                 switch(rm) {
                 case 0: /* VMRUN */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7665,11 +7709,15 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     }
                     break;
                 case 1: /* VMMCALL */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->flags & HF_SVME_MASK))
                         goto illegal_op;
                     gen_helper_vmmcall(cpu_env);
                     break;
                 case 2: /* VMLOAD */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7680,6 +7728,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     }
                     break;
                 case 3: /* VMSAVE */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7719,6 +7769,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     gen_helper_skinit(cpu_env);
                     break;
                 case 7: /* INVLPGA */
+                    QTRACE_ADD_FLAG(s, QTRACE_IS_INVLPGA);
+                    QTRACE_FLAGS_DONE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7830,6 +7882,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x108: /* invd */
     case 0x109: /* wbinvd */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_INVD);
+        QTRACE_FLAGS_DONE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -7941,6 +7995,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x118:
+        QTRACE_ADD_FLAG(s, QTRACE_IS_PREFETCH);
+        QTRACE_FLAGS_DONE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         mod = (modrm >> 6) & 3;
         op = (modrm >> 3) & 7;
@@ -7960,6 +8016,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x119 ... 0x11f: /* nop (multi byte) */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
+        QTRACE_FLAGS_DONE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         gen_nop_modrm(env, s, modrm);
         break;
@@ -8118,6 +8176,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             break;
         case 5: /* lfence */
         case 6: /* mfence */
+            QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
+            QTRACE_FLAGS_DONE(s);
             if ((modrm & 0xc7) != 0xc0 || !(s->cpuid_features & CPUID_SSE2))
                 goto illegal_op;
             break;
@@ -8125,10 +8185,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             if ((modrm & 0xc7) == 0xc0) {
                 /* sfence */
                 /* XXX: also check for cpuid_ext2_features & CPUID_EXT2_EMMX */
+                QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
+                QTRACE_FLAGS_DONE(s);
                 if (!(s->cpuid_features & CPUID_SSE))
                     goto illegal_op;
             } else {
                 /* clflush */
+                QTRACE_ADD_FLAG(s, QTRACE_IS_CLFLUSH);
+                QTRACE_FLAGS_DONE(s);
                 if (!(s->cpuid_features & CPUID_CLFLUSH))
                     goto illegal_op;
                 gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
@@ -8394,10 +8458,10 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         if (is_kern) QTRACE_ADD_FLAG(dc, QTRACE_IS_KERN);
         if (is_user) QTRACE_ADD_FLAG(dc, QTRACE_IS_USER);
 
-        /* call instruction instrumentation routine */
-        qtrace_invoke_instruction_callback(dc->qtrace_insnflags);
-
+        dc->qtrace_insncallback = false;
         pc_ptr = disas_insn(env, dc, pc_ptr);
+
+        /* qtrace_insncallback should have been set to true at this point*/
         num_insns++;
         /* stop translation if indicated */
         if (dc->is_jmp)
