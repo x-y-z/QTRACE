@@ -19,14 +19,18 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "cpu.h"
 #include "qtrace.h"
+
 
 InstructionRtn* icb_head = NULL;
 IBasicBlockRtn* ibb_head = NULL;
 
 static const char* icb = "InstructionCallBack"; 
 static const char* bcb = "BasicBlockCallBack"; 
+static const char* ims = "INS_InsertCall";
+static const char* ibb = "IBB_InsertCall";
 static void* handle = NULL;
 
 static inline void handle_unable_load_module(const char *optarg)
@@ -74,15 +78,29 @@ static void register_ibasicblock_cb(BASICBLOCKCB cb)
    head->next = NULL;
 }
 
+
+static void qtrace_instrument(unsigned pos, ...) 
+{
+  int idx=0;
+  va_list arguments;                  
+  va_start (arguments, pos);         
+  for (idx=0;idx<pos;idx++);        
+  va_end ( arguments );          
+}
+
 void qtrace_instrument_parse(const char *module)
 {
-   printf("module name is %s\n", module);
    /* load the instrumentation module */
    if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
-   /* register the runtime instrumentation functions */
+   /* register the instrumentation module functions with runtime */
    register_instruction_cb((INSTRUCTIONCB)dlsym(handle, icb));
    register_ibasicblock_cb((BASICBLOCKCB)dlsym(handle, bcb));
+
+   /* register runtime functions with the instrumentation module */
+   MODULE_FUNC_INIT module_function_init;
+   module_function_init = dlsym(handle, ims);
+   module_function_init(qtrace_instrument);
    /* done */
 }
 
@@ -98,6 +116,8 @@ void qtrace_invoke_instruction_callback(unsigned arg0)
     } 
     return;
 }
+
+
 
 
 

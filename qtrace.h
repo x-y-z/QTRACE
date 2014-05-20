@@ -103,5 +103,14 @@ extern IBasicBlockRtn* ibb_head;
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
 
+typedef void 
+(*MODULE_FUNC_INIT)(void(*)(unsigned, ...));
+
+typedef void 
+(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
+
+
+
+
 #endif /* QTRACE_H */
 
