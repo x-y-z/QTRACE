@@ -23,9 +23,8 @@
 #include "cpu.h"
 #include "qtrace.h"
 
-
-InstructionRtn* icb_head = NULL;
-IBasicBlockRtn* ibb_head = NULL;
+InstructionRtn* instruction_list = NULL;
+IBasicBlockRtn* basicblock_list = NULL;
 
 static const char* icb = "InstructionCallBack"; 
 static const char* bcb = "BasicBlockCallBack"; 
@@ -39,14 +38,13 @@ static inline void handle_unable_load_module(const char *optarg)
    QTRACE_EXIT(-1);
 }
 
-static void register_instruction_cb(INSTRUCTIONCB cb)
+static void register_instruction_cb(INSTRUCTION_CALLBACK cb)
 {
    /* it is possible that this module does not define a instruction callback */
    if (!cb) return;
 
-   printf("register InstructionCallBack\n");
-   InstructionRtn *head = icb_head;
-   if (!icb_head) head = icb_head = malloc(sizeof(InstructionRtn));
+   InstructionRtn *head = instruction_list;
+   if (!instruction_list) head = instruction_list = malloc(sizeof(InstructionRtn));
    else 
    {
      /* get to the end of the linkedlist */
@@ -59,13 +57,13 @@ static void register_instruction_cb(INSTRUCTIONCB cb)
    head->next = NULL;
 }
 
-static void register_ibasicblock_cb(BASICBLOCKCB cb)
+static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb)
 {
    /* it is possible that this module does not define a basicblock callback */
    if (!cb) return;
 
-   IBasicBlockRtn *head = ibb_head;
-   if (!ibb_head) head = ibb_head = malloc(sizeof(IBasicBlockRtn));
+   IBasicBlockRtn *head = basicblock_list;
+   if (!basicblock_list) head = basicblock_list = malloc(sizeof(IBasicBlockRtn));
    else 
    {
      /* get to the end of the linkedlist */
@@ -94,11 +92,11 @@ void qtrace_instrument_parse(const char *module)
    if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
    /* register the instrumentation module functions with runtime */
-   register_instruction_cb((INSTRUCTIONCB)dlsym(handle, icb));
-   register_ibasicblock_cb((BASICBLOCKCB)dlsym(handle, bcb));
+   register_instruction_cb((INSTRUCTION_CALLBACK)dlsym(handle, icb));
+   register_ibasicblock_cb((IBASICBLOCK_CALLBACK)dlsym(handle, bcb));
 
    /* register runtime functions with the instrumentation module */
-   MODULE_FUNC_INIT module_function_init;
+   QTRACE_MODULE_FUNC_INIT module_function_init;
    module_function_init = dlsym(handle, ims);
    module_function_init(qtrace_instrument);
    /* done */
@@ -107,7 +105,7 @@ void qtrace_instrument_parse(const char *module)
 /* invoke all the instruction callbacks */
 void qtrace_invoke_instruction_callback(unsigned arg0)
 {
-    InstructionRtn* curr_icc = icb_head;
+    InstructionRtn* curr_icc = instruction_list;
     while(curr_icc) 
     {
        assert(curr_icc->rtn);

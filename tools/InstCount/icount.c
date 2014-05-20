@@ -24,5 +24,5 @@ void InstructionCallBack(unsigned type)
 {
     totlcount ++;
     usercount += QTRACE_TEST_INVLPGA(type);
-    if (totlcount % PRINT_FREQ == 0) printf("totalcount is %d QTRACE_TEST_INVLPGA:%d kern:%d\n", totlcount, usercount);
+    ///if (totlcount % PRINT_FREQ == 0) printf("totalcount is %d QTRACE_TEST_INVLPGA:%d kern:%d\n", totlcount, usercount);
 }

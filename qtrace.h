@@ -21,25 +21,41 @@
 #define QTRACE_H
 
 /// ------------------------------------------------ ///
+/// instrumentation prototypes. 
+/// ------------------------------------------------ ///
+typedef 
+void (*INSTRUCTION_CALLBACK)(unsigned);
+
+typedef 
+void (*IBASICBLOCK_CALLBACK)(unsigned);
+
+typedef 
+void 
+(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
+
+typedef 
+void 
+(*QTRACE_MODULE_FUNC_INIT)(QTRACE_INSERT_INSTRUMENT_CALLBACK);
+
+/// ------------------------------------------------ ///
+/// instrumentation module metadata 
+/// ------------------------------------------------ ///
+struct instructionRtn { INSTRUCTION_CALLBACK rtn; struct InstructionRtn *next; };
+typedef struct instructionRtn InstructionRtn;
+
+struct iBasicBlockRtn { IBASICBLOCK_CALLBACK rtn; struct IBasicBlockRtn *next; };
+typedef struct iBasicBlockRtn IBasicBlockRtn;
+
+/* list to keep all the instruction and basicblock level instrumentation */
+extern InstructionRtn* icb_head;
+extern IBasicBlockRtn* ibb_head;
+
+/// ------------------------------------------------ ///
 /// instrumentation function list
 /// ------------------------------------------------ ///
 void qtrace_instrument_parse(const char*);
 void qtrace_invoke_instruction_callback(unsigned arg0);
-typedef void (*INSTRUCTIONCB)(unsigned);
-typedef void (*BASICBLOCKCB)(unsigned);
 
-typedef struct InstructionRtn {
-   INSTRUCTIONCB rtn;
-   struct InstructionRtn *next;
-} InstructionRtn;
-
-typedef struct IBasicBlockRtn {
-   BASICBLOCKCB rtn;
-   struct IBasicBlockRtn *next;
-} IBasicBlockRtn;
-
-extern InstructionRtn* icb_head;
-extern IBasicBlockRtn* ibb_head;
 
 /// ------------------------------------------------ ///
 /// miscellaneous 
@@ -102,15 +118,6 @@ extern IBasicBlockRtn* ibb_head;
 #define QTRACE_TEST_VIRT(X)       ((X&QTRACE_IS_VIRT)>0)
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
-
-typedef void 
-(*MODULE_FUNC_INIT)(void(*)(unsigned, ...));
-
-typedef void 
-(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
-
-
-
 
 #endif /* QTRACE_H */
 
