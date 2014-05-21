@@ -919,6 +919,10 @@ typedef struct CPUX86State {
     uint64_t xcr0;
 
     TPRAccess tpr_access_type;
+
+    /* For QTRACE */
+    target_ulong qtrace_vma;     /* virtual memory address */
+    target_ulong qtrace_pma;     /* physcal memory address */
 } CPUX86State;
 
 #include "cpu-qom.h"

@@ -73,6 +73,10 @@ static TCGv_ptr cpu_ptr0, cpu_ptr1;
 static TCGv_i32 cpu_tmp2_i32, cpu_tmp3_i32;
 static TCGv_i64 cpu_tmp1_i64;
 
+/* for qtrace */
+static TCGv qtrace_vma;
+static TCGv qtrace_pma;
+
 static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
 /* instruction parsed. call the instrumentation routine */
@@ -131,6 +135,11 @@ typedef struct DisasContext {
     unsigned qtrace_insnflags;
     unsigned qtrace_insncallback;
 } DisasContext;
+
+/* For QTrace */
+static DisasContext stmp;
+#define QTRACE_PUSH_DISASCONTEXT(s)    { stmp = *s; }
+#define QTRACE_POP_DISASCONTEXT(s)     { *s = stmp; }
 
 static void gen_eob(DisasContext *s);
 static void gen_jmp(DisasContext *s, target_ulong eip);
@@ -223,6 +232,8 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_ADCOX] = USES_CC_DST | USES_CC_SRC | USES_CC_SRC2,
     [CC_OP_CLR] = 0,
 };
+
+
 
 static void set_cc_op(DisasContext *s, CCOp op)
 {
@@ -2274,6 +2285,36 @@ static void gen_lea_modrm(CPUX86State *env, DisasContext *s, int modrm,
     disp = 0;
     *reg_ptr = opreg;
     *offset_ptr = disp;
+}
+
+/* push the virtual memory address to the cpu structure */
+static void QTRACE_PUSH_VMA(CPUX86State *env, DisasContext *s, int modrm)
+{
+    /* save the disasasmble context */
+    QTRACE_PUSH_DISASCONTEXT(s);
+
+    int mod, opreg, disp;
+    mod = (modrm >> 6) & 3;
+    if (mod != 3) {
+        /* this instruction accesses memory */
+        gen_lea_modrm(env, s, modrm, &opreg, &disp);
+        tcg_gen_mov_tl(cpu_A0, qtrace_vma);                    
+    }
+
+    /* restore the disasasmble context */
+    QTRACE_POP_DISASCONTEXT(s);
+    return;
+}
+
+/* push the physical memory address to the cpu structure */
+static void QTRACE_PUSH_PMA(CPUX86State *env, DisasContext *s, int modrm)
+{
+#if 0
+    /* compute the virtual memory address first */
+    QTRACE_PUSH_VMA(env, s, modrm);
+    /* do the translation */
+    tcg_gen_qemu_xlate(qtrace_pma, qtrace_vma, s->mem_index);
+#endif
 }
 
 static void gen_nop_modrm(CPUX86State *env, DisasContext *s, int modrm)
@@ -5674,11 +5715,17 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         modrm = cpu_ldub_code(env, s->pc++);
         reg = ((modrm >> 3) & 7) | rex_r;
 
+        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+        QTRACE_FLAGS_DONE(s);
+
+        QTRACE_PUSH_VMA(env, s, modrm);
+
         /* generate a generic store */
         gen_ldst_modrm(env, s, modrm, ot, reg, 1);
         break;
     case 0xc6:
     case 0xc7: /* mov Ev, Iv */
+        /// XIN.
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5686,13 +5733,17 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         modrm = cpu_ldub_code(env, s->pc++);
         mod = (modrm >> 6) & 3;
         if (mod != 3) {
+            QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+            QTRACE_FLAGS_DONE(s);
+
             s->rip_offset = insn_const_size(ot);
             gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
         }
         val = insn_get(env, s, ot);
         gen_op_movl_T0_im(val);
-        if (mod != 3)
+        if (mod != 3) {
             gen_op_st_T0_A0(ot + s->mem_index);
+        }
         else
             gen_op_mov_reg_T0(ot, (modrm & 7) | REX_B(s));
         break;
@@ -8315,6 +8366,12 @@ void optimize_flags_init(void)
                                           offsetof(CPUX86State, regs[14]), "r14");
     cpu_regs[15] = tcg_global_mem_new_i64(TCG_AREG0,
                                           offsetof(CPUX86State, regs[15]), "r15");
+
+    /* For QTrace */
+    qtrace_vma = tcg_global_mem_new_i64(TCG_AREG0,
+                                        offsetof(CPUX86State, qtrace_vma), "qtrace_vma");
+    qtrace_pma = tcg_global_mem_new_i64(TCG_AREG0,
+                                        offsetof(CPUX86State, qtrace_pma), "qtrace_pma");
 #else
     cpu_regs[R_EAX] = tcg_global_mem_new_i32(TCG_AREG0,
                                              offsetof(CPUX86State, regs[R_EAX]), "eax");
@@ -8332,6 +8389,11 @@ void optimize_flags_init(void)
                                              offsetof(CPUX86State, regs[R_ESI]), "esi");
     cpu_regs[R_EDI] = tcg_global_mem_new_i32(TCG_AREG0,
                                              offsetof(CPUX86State, regs[R_EDI]), "edi");
+    /* For QTrace */
+    qtrace_vma = tcg_global_mem_new_i32(TCG_AREG0,
+                                        offsetof(CPUX86State, qtrace_vma), "qtrace_vma");
+    qtrace_pma = tcg_global_mem_new_i32(TCG_AREG0,
+                                        offsetof(CPUX86State, qtrace_pma), "qtrace_pma");
 #endif
 }
 
