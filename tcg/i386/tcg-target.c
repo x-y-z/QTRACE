@@ -1673,11 +1673,11 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
                   label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
     case QTRACE_MEMTRACE_PMA:
-       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits,
+       tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits,
                   label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
     case QTRACE_MEMTRACE_VPMA:
-       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits,
+       tcg_out_tlb_load_trace_vma_pma(s, addrlo, addrhi, mem_index, s_bits,
                   label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
     default:

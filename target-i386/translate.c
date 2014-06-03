@@ -610,14 +610,14 @@ static inline void gen_op_lds_T0_A0(int idx)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
+        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_VMA|QTRACE_MEMTRACE_BVAL)));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
+        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_VMA|QTRACE_MEMTRACE_BVAL)));
         break;
     default:
     case OT_LONG:
-        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VPMA));
+        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_VPMA|QTRACE_MEMTRACE_BVAL)));
         break;
     }
 }
@@ -630,10 +630,10 @@ static inline void gen_op_ld_v(int idx, TCGv t0, TCGv a0)
         tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_PMA|QTRACE_MEMTRACE_BVAL)));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
+        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_VMA|QTRACE_MEMTRACE_BVAL)));
         break;
     case OT_LONG:
-        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VPMA));
+        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_VPMA|QTRACE_MEMTRACE_BVAL)));
         break;
     default:
     case OT_QUAD:
