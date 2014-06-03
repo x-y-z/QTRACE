@@ -262,7 +262,6 @@ DEF(qemu_st64, 0, 4, 1, IMPL_OLD_LDST | TCG_OPF_64BIT)
 #endif
 
 #else /* TCG_TARGET_REG_BITS == 32 */
-
 DEF(qemu_ld8u, 1, 1, 1, IMPL_OLD_LDST | TCG_OPF_64BIT)
 DEF(qemu_ld8s, 1, 1, 1, IMPL_OLD_LDST | TCG_OPF_64BIT)
 DEF(qemu_ld16u, 1, 1, 1, IMPL_OLD_LDST | TCG_OPF_64BIT)

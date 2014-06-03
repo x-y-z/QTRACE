@@ -324,6 +324,13 @@ extern unsigned long reserved_va;
 #define TARGET_PAGE_MASK ~(TARGET_PAGE_SIZE - 1)
 #define TARGET_PAGE_ALIGN(addr) (((addr) + TARGET_PAGE_SIZE - 1) & TARGET_PAGE_MASK)
 
+/* qtrace memory tracing related stuff */
+
+#define QTRACE_MEMTRACE_BITS 4
+#define QTRACE_ADD_MEMTRACE(index, tracex)   ((index) & (tracex << QTRACE_MEMTRACE_BITS)) 
+#define QTRACE_EXT_MEMTRACE(index)           (index >> QTRACE_MEMTRACE_BITS) 
+#define QTRACE_EXT_MEMINDEX(index)           (index & (2<<QTRACE_MEMTRACE_BITS-1)) 
+
 /* ??? These should be the larger of uintptr_t and target_ulong.  */
 extern uintptr_t qemu_real_host_page_size;
 extern uintptr_t qemu_host_page_size;

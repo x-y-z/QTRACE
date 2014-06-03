@@ -871,6 +871,8 @@ void tcg_gen_qemu_ld_i32(TCGv_i32 val, TCGv addr, TCGArg idx, TCGMemOp memop)
         return;
     }
 
+
+    assert(0 && "QTRACE not implemented");
     /* The old opcodes only support target-endian memory operations.  */
     assert((memop & MO_BSWAP) == MO_TE || (memop & MO_SIZE) == MO_8);
     assert(old_ld_opc[memop & MO_SSIZE] != 0);
@@ -954,6 +956,8 @@ void tcg_gen_qemu_ld_i64(TCGv_i64 val, TCGv addr, TCGArg idx, TCGMemOp memop)
         return;
     }
 
+
+    assert(0 && "QTRACE not implemented");
     /* The old opcodes only support target-endian memory operations.  */
     assert((memop & MO_BSWAP) == MO_TE || (memop & MO_SIZE) == MO_8);
     assert(old_ld_opc[memop & MO_SSIZE] != 0);
