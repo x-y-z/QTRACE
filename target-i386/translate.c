@@ -86,7 +86,6 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
    s->qtrace_insncallback = true;                            \
 } while(0);
 
-#define QTRACE_ADD_MEMTRACE(index, tracex)   ((index) & (tracex << 4)) 
 
 #include "exec/gen-icount.h"
 
@@ -611,14 +610,14 @@ static inline void gen_op_lds_T0_A0(int idx)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
         break;
     default:
     case OT_LONG:
-        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VPMA));
         break;
     }
 }
@@ -628,19 +627,19 @@ static inline void gen_op_ld_v(int idx, TCGv t0, TCGv a0)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, (QTRACE_MEMTRACE_PMA|QTRACE_MEMTRACE_BVAL)));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VMA));
         break;
     case OT_LONG:
-        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VPMA));
         break;
     default:
     case OT_QUAD:
         /* Should never happen on 32-bit targets.  */
 #ifdef TARGET_X86_64
-        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, 0));
+        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, QTRACE_MEMTRACE_VPMA));
 #endif
         break;
     }

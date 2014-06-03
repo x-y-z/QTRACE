@@ -1139,9 +1139,9 @@ static inline void tcg_out_tlb_load(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
                          offsetof(CPUTLBEntry, addend) - which);
 }
 
-static inline void tcg_out_tlb_load_trace_va(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
-                                    int mem_index, TCGMemOp s_bits,
-                                    uint8_t **label_ptr, int which)
+static inline void tcg_out_tlb_load_trace_vma(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
+                                              int mem_index, TCGMemOp s_bits,
+                                              uint8_t **label_ptr, int which)
 {
     const TCGReg r0 = TCG_REG_L0;
     const TCGReg r1 = TCG_REG_L1;
@@ -1163,11 +1163,8 @@ static inline void tcg_out_tlb_load_trace_va(TCGContext *s, TCGReg addrlo, TCGRe
     tcg_out_mov(s, htype, r0, addrlo);
     tcg_out_mov(s, ttype, r1, addrlo);
 
-    /* trace the virtual address */
-#if 0
-    tcg_out_modrm_sib_offset(s, OPC_LEA + hrexw, r0, TCG_AREG0, r0, 0,
-                             offsetof(CPUArchState, qtrace_vma));
-#endif
+    /* save the virtual address in the instrumentation area */
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
 
     tcg_out_shifti(s, SHIFT_SHR + hrexw, r0,
                    TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS);
@@ -1215,9 +1212,9 @@ static inline void tcg_out_tlb_load_trace_va(TCGContext *s, TCGReg addrlo, TCGRe
 }
 
 
-static inline void tcg_out_tlb_load_trace_pa(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
-                                    int mem_index, TCGMemOp s_bits,
-                                    uint8_t **label_ptr, int which)
+static inline void tcg_out_tlb_load_trace_pma(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
+                                              int mem_index, TCGMemOp s_bits,
+                                              uint8_t **label_ptr, int which)
 {
     const TCGReg r0 = TCG_REG_L0;
     const TCGReg r1 = TCG_REG_L1;
@@ -1238,12 +1235,6 @@ static inline void tcg_out_tlb_load_trace_pa(TCGContext *s, TCGReg addrlo, TCGRe
 
     tcg_out_mov(s, htype, r0, addrlo);
     tcg_out_mov(s, ttype, r1, addrlo);
-
-
-    /* trace the virtual address */
-    tcg_out_modrm_sib_offset(s, OPC_LEA + hrexw, r0, TCG_AREG0, r0, 0,
-                             offsetof(CPUArchState, qtrace_vma)
-                             + which);
 
     tcg_out_shifti(s, SHIFT_SHR + hrexw, r0,
                    TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS);
@@ -1288,12 +1279,15 @@ static inline void tcg_out_tlb_load_trace_pa(TCGContext *s, TCGReg addrlo, TCGRe
     /* add addend(r0), r1 */
     tcg_out_modrm_offset(s, OPC_ADD_GvEv + hrexw, r1, r0,
                          offsetof(CPUTLBEntry, addend) - which);
+
+    /* save the host virtual address in the instrumentation area */
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r1, TCG_AREG0, offsetof(CPUArchState, qtrace_pma));
 }
 
 
-static inline void tcg_out_tlb_load_trace_va_pa(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
-                                    int mem_index, TCGMemOp s_bits,
-                                    uint8_t **label_ptr, int which)
+static inline void tcg_out_tlb_load_trace_vma_pma(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
+                                                  int mem_index, TCGMemOp s_bits,
+                                                  uint8_t **label_ptr, int which)
 {
     const TCGReg r0 = TCG_REG_L0;
     const TCGReg r1 = TCG_REG_L1;
@@ -1315,11 +1309,8 @@ static inline void tcg_out_tlb_load_trace_va_pa(TCGContext *s, TCGReg addrlo, TC
     tcg_out_mov(s, htype, r0, addrlo);
     tcg_out_mov(s, ttype, r1, addrlo);
 
-
-    /* trace the virtual address */
-    tcg_out_modrm_sib_offset(s, OPC_LEA + hrexw, r0, TCG_AREG0, r0, 0,
-                             offsetof(CPUArchState, qtrace_vma)
-                             + which);
+    /* save the virtual address in the instrumentation area */
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
 
     tcg_out_shifti(s, SHIFT_SHR + hrexw, r0,
                    TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS);
@@ -1364,10 +1355,10 @@ static inline void tcg_out_tlb_load_trace_va_pa(TCGContext *s, TCGReg addrlo, TC
     /* add addend(r0), r1 */
     tcg_out_modrm_offset(s, OPC_ADD_GvEv + hrexw, r1, r0,
                          offsetof(CPUTLBEntry, addend) - which);
+
+    /* save the host virtual address in the instrumentation area */
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r1, TCG_AREG0, offsetof(CPUArchState, qtrace_pma));
 }
-
-
-
 
 /*
  * Record the context of a call to the out of line helper code for the slow path
@@ -1616,6 +1607,7 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg datalo, TCGReg datahi,
                 tcg_out_bswap64(s, datalo);
             }
         } else {
+            assert(0 && "QTRACE unimplemented");
             if (bswap) {
                 int t = datalo;
                 datalo = datahi;
@@ -1666,27 +1658,27 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
 
 #if defined(CONFIG_SOFTMMU)
     mem_index = *args++;
-    mem_trace = QTRACE_EXT_MEMINDEX(mem_index);
+    mem_trace = QTRACE_EXT_MEMTRACE(mem_index);
     mem_index = QTRACE_EXT_MEMINDEX(mem_index);
     s_bits = opc & MO_SIZE;
 
-    switch(mem_trace)
+    switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
     {
-    case 0:
+    case QTRACE_MEMTRACE_NONE:
        tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
-                     label_ptr, offsetof(CPUTLBEntry, addr_read));
+                  label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
-    case 1:
-       tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
-                     label_ptr, offsetof(CPUTLBEntry, addr_read));
+    case QTRACE_MEMTRACE_VMA:
+       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits,
+                  label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
-    case 2:
-       tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
-                     label_ptr, offsetof(CPUTLBEntry, addr_read));
+    case QTRACE_MEMTRACE_PMA:
+       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits,
+                  label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
-    case 3:
-       tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
-                     label_ptr, offsetof(CPUTLBEntry, addr_read));
+    case QTRACE_MEMTRACE_VPMA:
+       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits,
+                  label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
     default:
        assert(0);
@@ -1695,6 +1687,14 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
 
     /* TLB Hit.  */
     tcg_out_qemu_ld_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
+
+    /* Record the loaded value */
+    if ((mem_trace & QTRACE_MEMTRACE_BVAL)) {
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_bval));
+    }
+    if ((mem_trace & QTRACE_MEMTRACE_AVAL)) { 
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_aval));
+    }
 
     /* Record the current context of a load into ldst label */
     add_qemu_ldst_label(s, 1, opc, datalo, datahi, addrlo, addrhi,
@@ -1798,6 +1798,7 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     TCGMemOp opc;
 #if defined(CONFIG_SOFTMMU)
     int mem_index;
+    int mem_trace;
     TCGMemOp s_bits;
     uint8_t *label_ptr[2];
 #endif
@@ -1810,13 +1811,45 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
 
 #if defined(CONFIG_SOFTMMU)
     mem_index = *args++;
+    mem_trace = QTRACE_EXT_MEMTRACE(mem_index);
+    mem_index = QTRACE_EXT_MEMINDEX(mem_index);
     s_bits = opc & MO_SIZE;
 
+    switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
+    {
+    case QTRACE_MEMTRACE_NONE:
     tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
                      label_ptr, offsetof(CPUTLBEntry, addr_write));
+       break;
+    case QTRACE_MEMTRACE_VMA:
+    tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
+                     label_ptr, offsetof(CPUTLBEntry, addr_write));
+       break;
+    case QTRACE_MEMTRACE_PMA:
+    tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
+                     label_ptr, offsetof(CPUTLBEntry, addr_write));
+       break;
+    case QTRACE_MEMTRACE_VPMA:
+    tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits,
+                     label_ptr, offsetof(CPUTLBEntry, addr_write));
+       break;
+    default:
+       assert(0);
+       break;
+    }
+
+    /* Record the loaded value */
+    if ((mem_trace & QTRACE_MEMTRACE_BVAL)) {
+       tcg_out_qemu_ld_direct(s, datahi, datahi, TCG_REG_L1, 0, 0, opc);
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_bval));
+    }
 
     /* TLB Hit.  */
     tcg_out_qemu_st_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
+
+    if ((mem_trace & QTRACE_MEMTRACE_AVAL)) { 
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_aval));
+    }
 
     /* Record the current context of a store into ldst label */
     add_qemu_ldst_label(s, 0, opc, datalo, datahi, addrlo, addrhi,
