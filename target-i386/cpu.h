@@ -923,8 +923,8 @@ typedef struct CPUX86State {
     /* For QTRACE */
     target_ulong qtrace_vma;     /* virtual memory address */
     target_ulong qtrace_pma;     /* physcal memory address */
-    target_ulong qtrace_bval;    /* before value */
-    target_ulong qtrace_aval;    /* after value  */
+    target_ulong qtrace_bval;    /* memory before value */
+    target_ulong qtrace_aval;    /* memory after value  */
 } CPUX86State;
 
 #include "cpu-qom.h"
