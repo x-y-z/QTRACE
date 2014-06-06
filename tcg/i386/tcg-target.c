@@ -1635,6 +1635,7 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg datalo, TCGReg datahi,
     }
 }
 
+
 /* XXX: qemu_ld and qemu_st could be modified to clobber only EDX and
    EAX. It will be useful once fixed registers globals are less
    common. */
@@ -1662,6 +1663,15 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     mem_index = QTRACE_EXT_MEMINDEX(mem_index);
     s_bits = opc & MO_SIZE;
 
+    /* record the size */
+    if (IS_QTRACE_MEMTRACE_MSIZE(mem_trace)) 
+    {
+       tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
+                            TCG_REG_L0, TCG_AREG0, 
+                            offsetof(CPUArchState, qtrace_msize));
+    }
+
     switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
     {
     case QTRACE_MEMTRACE_NONE:
@@ -1685,15 +1695,11 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     tcg_out_qemu_ld_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* Record the loaded value */
-    if ((mem_trace & QTRACE_MEMTRACE_BVAL)) {
+    if (IS_QTRACE_MEMTRACE_BVAL(mem_trace) || IS_QTRACE_MEMTRACE_AVAL(mem_trace)) 
+    {
        tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
                             datalo, TCG_AREG0, 
                             offsetof(CPUArchState, qtrace_bval));
-    }
-    if ((mem_trace & QTRACE_MEMTRACE_AVAL)) { 
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
-                            datalo, TCG_AREG0, 
-                            offsetof(CPUArchState, qtrace_aval));
     }
 
     /* Record the current context of a load into ldst label */
@@ -1791,6 +1797,72 @@ static void tcg_out_qemu_st_direct(TCGContext *s, TCGReg datalo, TCGReg datahi,
     }
 }
 
+static void tcg_out_qemu_st_direct_trace(TCGContext *s, TCGReg datalo, TCGReg datahi,
+                                         TCGReg base, intptr_t ofs, int seg,
+                                         TCGMemOp memop)
+{
+    const TCGMemOp bswap = memop & MO_BSWAP;
+
+    /* ??? Ideally we wouldn't need a scratch register.  For user-only,
+       we could perform the bswap twice to restore the original value
+       instead of moving to the scratch.  But as it is, the L constraint
+       means that TCG_REG_L0 is definitely free here.  */
+    const TCGReg scratch = TCG_REG_L0;
+
+    switch (memop & MO_SIZE) {
+    case MO_8:
+        /* In 32-bit mode, 8-byte stores can only happen from [abcd]x.
+           Use the scratch register if necessary.  */
+        if (TCG_TARGET_REG_BITS == 32 && datalo >= 4) {
+            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
+            datalo = scratch;
+        }
+        tcg_out_modrm_offset(s, OPC_MOVB_EvGv + P_REXB_R + seg,
+                             datalo, base, ofs);
+        break;
+    case MO_16:
+        if (bswap) {
+            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
+            tcg_out_rolw_8(s, scratch);
+            datalo = scratch;
+        }
+        tcg_out_modrm_offset(s, OPC_MOVL_EvGv + P_DATA16 + seg,
+                             datalo, base, ofs);
+        break;
+    case MO_32:
+        if (bswap) {
+            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
+            tcg_out_bswap32(s, scratch);
+            datalo = scratch;
+        }
+        tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datalo, base, ofs);
+        break;
+    case MO_64:
+        if (TCG_TARGET_REG_BITS == 64) {
+            if (bswap) {
+                tcg_out_mov(s, TCG_TYPE_I64, scratch, datalo);
+                tcg_out_bswap64(s, scratch);
+                datalo = scratch;
+            }
+            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + P_REXW + seg,
+                                 datalo, base, ofs);
+        } else if (bswap) {
+            tcg_out_mov(s, TCG_TYPE_I32, scratch, datahi);
+            tcg_out_bswap32(s, scratch);
+            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, scratch, base, ofs);
+            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
+            tcg_out_bswap32(s, scratch);
+            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, scratch, base, ofs+4);
+        } else {
+            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datalo, base, ofs);
+            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datahi, base, ofs+4);
+        }
+        break;
+    default:
+        tcg_abort();
+    }
+}
+
 static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
 {
     TCGReg datalo, datahi, addrlo;
@@ -1815,6 +1887,15 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     mem_index = QTRACE_EXT_MEMINDEX(mem_index);
     s_bits = opc & MO_SIZE;
 
+    /* record the size */
+    if (IS_QTRACE_MEMTRACE_MSIZE(mem_trace)) 
+    {
+       tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
+                            TCG_REG_L0, TCG_AREG0, 
+                            offsetof(CPUArchState, qtrace_msize));
+    }
+
     switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
     {
     case QTRACE_MEMTRACE_NONE:
@@ -1835,17 +1916,19 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     }
 
     /* record the value before store */
-    if ((mem_trace & QTRACE_MEMTRACE_BVAL)) {
+    if (IS_QTRACE_MEMTRACE_BVAL(mem_trace)) 
+    {
        tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_REG_L1, 0, 0, opc);
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_bval));
+       tcg_out_qemu_st_direct_trace(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_bval), 0, opc);
     }
 
     /* TLB Hit.  */
     tcg_out_qemu_st_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* record the value after store */
-    if ((mem_trace & QTRACE_MEMTRACE_AVAL)) { 
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_aval));
+    if (IS_QTRACE_MEMTRACE_AVAL(mem_trace)) 
+    { 
+       tcg_out_qemu_st_direct_trace(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_aval), 0, opc);
     }
 
     /* Record the current context of a store into ldst label */

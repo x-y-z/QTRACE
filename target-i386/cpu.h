@@ -921,6 +921,7 @@ typedef struct CPUX86State {
     TPRAccess tpr_access_type;
 
     /* For QTRACE */
+    target_ulong qtrace_msize;   /* memory size */
     target_ulong qtrace_vma;     /* virtual memory address */
     target_ulong qtrace_pma;     /* physcal memory address */
     target_ulong qtrace_bval;    /* memory before value */

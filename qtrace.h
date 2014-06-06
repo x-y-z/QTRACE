@@ -119,5 +119,27 @@ void qtrace_invoke_instruction_callback(unsigned arg0);
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
 
+
+/* qtrace memory tracing related stuff */
+
+#define QTRACE_MEMTRACE_BITS 4
+#define QTRACE_ADD_MEMTRACE(index, tracex)   (((index) | (tracex << QTRACE_MEMTRACE_BITS))) 
+#define QTRACE_EXT_MEMTRACE(index)           ((index >> QTRACE_MEMTRACE_BITS)) 
+#define QTRACE_EXT_MEMINDEX(index)           ((index & ((1<<QTRACE_MEMTRACE_BITS)-1))) 
+#define QTRACE_EXT_MEMADDTRACE(index)        ((index & 7))
+#define QTRACE_MEMTRACE_NONE  (0)
+#define QTRACE_MEMTRACE_VMA   (1<<0)
+#define QTRACE_MEMTRACE_PMA   (1<<1) 
+#define QTRACE_MEMTRACE_VPMA  (1<<2)
+#define QTRACE_MEMTRACE_BVAL  (1<<3)     /* IPOINT_BEFORE value */
+#define QTRACE_MEMTRACE_AVAL  (1<<4)     /* IPOINT_AFTER  value */
+#define QTRACE_MEMTRACE_MSIZE (1<<5)     /* IPOINT_AFTER  value */
+
+
+#define IS_QTRACE_MEMTRACE_BVAL(x)    (x & QTRACE_MEMTRACE_BVAL)
+#define IS_QTRACE_MEMTRACE_AVAL(x)    (x & QTRACE_MEMTRACE_AVAL)
+#define IS_QTRACE_MEMTRACE_MSIZE(x)   (x & QTRACE_MEMTRACE_MSIZE)
+
+
 #endif /* QTRACE_H */
 
