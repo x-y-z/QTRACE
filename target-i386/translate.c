@@ -80,7 +80,7 @@ static TCGv qtrace_pma;
 static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
 /* instruction parsed. call the instrumentation routine */
-#define QTRACE_FLAGS_DONE(s)                           do {  \
+#define QTRACE_CLIENT_MODULE(s)                           do {  \
    /* call instruction instrumentation routine */            \
    qtrace_invoke_instruction_callback(s->qtrace_insnflags);  \
    s->qtrace_insncallback = true;                            \
@@ -4889,7 +4889,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x38 ... 0x3d:
         {
             QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
             int op, f, val;
             op = (b >> 3) & 7;
             f = (b >> 1) & 3;
@@ -4953,7 +4953,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x83:
         {
             QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
             int val;
 
             if ((b & 1) == 0)
@@ -4997,20 +4997,20 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* inc, dec, and other misc arith */
     case 0x40 ... 0x47: /* inc Gv */
         QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), 1);
         break;
     case 0x48 ... 0x4f: /* dec Gv */
         QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), -1);
         break;
     case 0xf6: /* GRP3 */
     case 0xf7:
         QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5704,8 +5704,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         modrm = cpu_ldub_code(env, s->pc++);
         reg = ((modrm >> 3) & 7) | rex_r;
 
+        /* add the flags for this instruction and call the instrumentation module */
         QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
 
         qtrace_xlate_flags(s);
 
@@ -5714,7 +5715,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0xc6:
     case 0xc7: /* mov Ev, Iv */
-        /// XIN.
+        /* move imm8 to r/m8 */
+        /* move imm16 to r/m16. */
+        /* move imm32 to r/m32. */
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5722,12 +5725,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         modrm = cpu_ldub_code(env, s->pc++);
         mod = (modrm >> 6) & 3;
         if (mod != 3) {
+            /* this is a store to memory */
             QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
 
             s->rip_offset = insn_const_size(ot);
             gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
         }
+        /* move the immediate to a temporary register */
         val = insn_get(env, s, ot);
         gen_op_movl_T0_im(val);
         if (mod != 3) {
@@ -5738,6 +5743,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x8a:
     case 0x8b: /* mov Ev, Gv */
+        /* Move r/m8 to r8. */
+        /* Move r/m16 to r16. */
+        /* Move r/m32 to r32. */
+        /* Move r/m64 to r64. */
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5745,14 +5754,25 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         modrm = cpu_ldub_code(env, s->pc++);
         reg = ((modrm >> 3) & 7) | rex_r;
 
+        /* this is a load from memory */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        QTRACE_CLIENT_MODULE(s);
+
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 0);
         gen_op_mov_reg_T0(ot, reg);
         break;
     case 0x8e: /* mov seg, Gv */
+        /* Move r/m16 to segment register. */
+        /* Move lower 16 bits of r/m64 to segment register. */
         modrm = cpu_ldub_code(env, s->pc++);
         reg = (modrm >> 3) & 7;
         if (reg >= 6 || reg == R_CS)
             goto illegal_op;
+
+        /* this is a load from memory */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        QTRACE_CLIENT_MODULE(s);
+
         gen_ldst_modrm(env, s, modrm, OT_WORD, OR_TMP0, 0);
         gen_movl_seg_T0(s, reg, pc_start - s->cs_base);
         if (reg == R_SS) {
@@ -5769,6 +5789,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x8c: /* mov Gv, seg */
+        /* Move segment register to r/m16. */
         modrm = cpu_ldub_code(env, s->pc++);
         reg = (modrm >> 3) & 7;
         mod = (modrm >> 6) & 3;
@@ -5779,6 +5800,11 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             ot = OT_WORD + dflag;
         else
             ot = OT_WORD;
+
+        /* this is a store to memory */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+        QTRACE_CLIENT_MODULE(s);
+
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 1);
         break;
 
@@ -5816,6 +5842,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 }
                 gen_op_mov_reg_T0(d_ot, reg);
             } else {
+                /* this is a load from memory */
+                QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                QTRACE_CLIENT_MODULE(s);
+
                 gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
                 if (b & 8) {
                     gen_op_lds_T0_A0(ot + s->mem_index, s);
@@ -5848,6 +5878,16 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0xa2: /* mov Ov, EAX */
     case 0xa3:
         {
+            /* Move byte at (seg:offset) to AL.*/
+            /* Move byte at (offset) to AL. */
+            /* Move word at (seg:offset) to AX. */
+            /* Move doubleword at (seg:offset) to EAX. */
+            /* Move quadword at (offset) to RAX. */
+            /* Move AL to (seg:offset). */
+            /* Move AL to (offset). */
+            /* Move AX to (seg:offset). */
+            /* Move EAX to (seg:offset). */
+            /* Move RAX to (offset) */ 
             target_ulong offset_addr;
 
             if ((b & 1) == 0)
@@ -5871,9 +5911,17 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             }
             gen_add_A0_ds_seg(s);
             if ((b & 2) == 0) {
+                /* this is a load from memory */
+                QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                QTRACE_CLIENT_MODULE(s);
+
                 gen_op_ld_T0_A0(ot + s->mem_index, s);
                 gen_op_mov_reg_T0(ot, R_EAX);
             } else {
+                /* this is a store from memory */
+                QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+                QTRACE_CLIENT_MODULE(s);
+
                 gen_op_mov_TN_reg(ot, 0, R_EAX);
                 gen_op_st_T0_A0(ot + s->mem_index, s);
             }
@@ -6884,7 +6932,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0xe8: /* call im */
         {
             QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
             if (dflag)
                 tval = (int32_t)insn_get(env, s, OT_LONG);
             else
@@ -6903,7 +6951,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x9a: /* lcall im */
         {
             QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
             unsigned int selector, offset;
 
             if (CODE64(s))
@@ -7283,7 +7331,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* misc */
     case 0x90: /* nop */
         QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         /* XXX: correct lock test for all insn */
         if (prefixes & PREFIX_LOCK) {
             goto illegal_op;
@@ -7480,7 +7528,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x131: /* rdtsc */
         QTRACE_ADD_FLAG(s, QTRACE_IS_RDTSC);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         if (use_icount)
@@ -7498,7 +7546,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x134: /* sysenter */
         QTRACE_ADD_FLAG(s, QTRACE_IS_SYSENTER);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         /* For Intel SYSENTER is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
             goto illegal_op;
@@ -7513,7 +7561,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x135: /* sysexit */
         QTRACE_ADD_FLAG(s, QTRACE_IS_SYSEXIT);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         /* For Intel SYSEXIT is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
             goto illegal_op;
@@ -7530,7 +7578,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x105: /* syscall */
         /* XXX: is it usable in real mode ? */
         QTRACE_ADD_FLAG(s, QTRACE_IS_SYSCALL);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         gen_helper_syscall(cpu_env, tcg_const_i32(s->pc - pc_start));
@@ -7538,7 +7586,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x107: /* sysret */
         QTRACE_ADD_FLAG(s, QTRACE_IS_SYSRET);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         if (!s->pe) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -7555,14 +7603,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 #endif
     case 0x1a2: /* cpuid */
         QTRACE_ADD_FLAG(s, QTRACE_IS_CPUID);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         gen_helper_cpuid(cpu_env);
         break;
     case 0xf4: /* hlt */
         QTRACE_ADD_FLAG(s, QTRACE_IS_HLT);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -7664,7 +7712,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 switch (rm) {
                 case 0: /* monitor */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_MONITOR);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
                         goto illegal_op;
@@ -7685,7 +7733,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     break;
                 case 1: /* mwait */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_MWAIT);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
                         goto illegal_op;
@@ -7735,7 +7783,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 switch(rm) {
                 case 0: /* VMRUN */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7750,14 +7798,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     break;
                 case 1: /* VMMCALL */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK))
                         goto illegal_op;
                     gen_helper_vmmcall(cpu_env);
                     break;
                 case 2: /* VMLOAD */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7769,7 +7817,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     break;
                 case 3: /* VMSAVE */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7810,7 +7858,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     break;
                 case 7: /* INVLPGA */
                     QTRACE_ADD_FLAG(s, QTRACE_IS_INVLPGA);
-                    QTRACE_FLAGS_DONE(s);
+                    QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
                     if (s->cpl != 0) {
@@ -7923,7 +7971,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x108: /* invd */
     case 0x109: /* wbinvd */
         QTRACE_ADD_FLAG(s, QTRACE_IS_INVD);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
@@ -8036,7 +8084,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x118:
         QTRACE_ADD_FLAG(s, QTRACE_IS_PREFETCH);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         mod = (modrm >> 6) & 3;
         op = (modrm >> 3) & 7;
@@ -8057,7 +8105,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x119 ... 0x11f: /* nop (multi byte) */
         QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
-        QTRACE_FLAGS_DONE(s);
+        QTRACE_CLIENT_MODULE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         gen_nop_modrm(env, s, modrm);
         break;
@@ -8217,7 +8265,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         case 5: /* lfence */
         case 6: /* mfence */
             QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
-            QTRACE_FLAGS_DONE(s);
+            QTRACE_CLIENT_MODULE(s);
             if ((modrm & 0xc7) != 0xc0 || !(s->cpuid_features & CPUID_SSE2))
                 goto illegal_op;
             break;
@@ -8226,13 +8274,13 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 /* sfence */
                 /* XXX: also check for cpuid_ext2_features & CPUID_EXT2_EMMX */
                 QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
-                QTRACE_FLAGS_DONE(s);
+                QTRACE_CLIENT_MODULE(s);
                 if (!(s->cpuid_features & CPUID_SSE))
                     goto illegal_op;
             } else {
                 /* clflush */
                 QTRACE_ADD_FLAG(s, QTRACE_IS_CLFLUSH);
-                QTRACE_FLAGS_DONE(s);
+                QTRACE_CLIENT_MODULE(s);
                 if (!(s->cpuid_features & CPUID_CLFLUSH))
                     goto illegal_op;
                 gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);

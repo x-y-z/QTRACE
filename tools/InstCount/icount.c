@@ -20,9 +20,19 @@ void IBB_InsertCall(QTRACE_INSERT_INSTRUMENT_CALLBACK ibb_insertcall_func)
     Module_IBB_InsertCall = ibb_insertcall_func;
 }
 
+QTRACE_LOCAL_FUN void CacheSim(void* vma, void *pma, unsigned msize)
+{
+}
+
 void InstructionCallBack(unsigned type)
 {
-    totlcount ++;
-    usercount += QTRACE_TEST_INVLPGA(type);
-    ///if (totlcount % PRINT_FREQ == 0) printf("totalcount is %d QTRACE_TEST_INVLPGA:%d kern:%d\n", totlcount, usercount);
+    if (QTRACE_TEST_FETCH(type))
+    {
+       Module_INS_InsertCall(5, 
+                             QTRACE_IPOINT_BEFORE, 
+                             QTRACE_IFUN, 0, 
+                             QTRACE_MEMORY_VMA, 
+                             QTRACE_MEMORY_PMA, 
+                             QTRACE_MEMORY_SIZE);
+    }
 }

@@ -82,7 +82,8 @@ static void qtrace_instrument(unsigned pos, ...)
   int idx=0;
   va_list arguments;                  
   va_start (arguments, pos);         
-  for (idx=0;idx<pos;idx++);        
+  printf("pos is %d\n", pos);
+  for (idx=0;idx<pos;idx++) printf("%d\n", va_arg(arguments, unsigned));
   va_end ( arguments );          
 }
 
