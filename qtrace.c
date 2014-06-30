@@ -77,14 +77,20 @@ static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb)
 }
 
 
+InstrumentContext icontext; 
+
 static void qtrace_instrument(unsigned pos, ...) 
 {
   int idx=0;
   va_list arguments;                  
-  va_start (arguments, pos);         
-  printf("pos is %d\n", pos);
-  for (idx=0;idx<pos;idx++) printf("%d\n", va_arg(arguments, unsigned));
-  va_end ( arguments );          
+  va_start(arguments, pos);         
+  /// printf("pos is %d\n", pos);
+  for (idx=0;idx<pos;idx++) 
+  {
+     icontext.btarget = (va_arg(arguments, unsigned) == QTRACE_BRANCH_TARGET);
+  }
+  ///printf("%d\n", va_arg(arguments, unsigned));
+  va_end (arguments);          
 }
 
 void qtrace_instrument_parse(const char *module)

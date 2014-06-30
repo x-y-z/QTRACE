@@ -26,6 +26,7 @@ QTRACE_LOCAL_FUN void CacheSim(void* vma, void *pma, unsigned msize)
 
 void InstructionCallBack(unsigned type)
 {
+#if 0
     if (QTRACE_TEST_FETCH(type))
     {
        Module_INS_InsertCall(5, 
@@ -34,5 +35,15 @@ void InstructionCallBack(unsigned type)
                              QTRACE_MEMORY_VMA, 
                              QTRACE_MEMORY_PMA, 
                              QTRACE_MEMORY_SIZE);
+    }
+#endif 
+
+    if (QTRACE_TEST_BRANCH(type))
+    {
+       Module_INS_InsertCall(4, 
+                             QTRACE_IPOINT_BEFORE, 
+                             QTRACE_IFUN, 0, 
+                             QTRACE_BRANCH_TARGET);
+ 
     }
 }

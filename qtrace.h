@@ -72,8 +72,15 @@ enum
    QTRACE_IFUN             ,
    QTRACE_MEMORY_VMA       ,
    QTRACE_MEMORY_PMA       ,
-   QTRACE_MEMORY_SIZE 
+   QTRACE_MEMORY_SIZE      ,
+   QTRACE_BRANCH_TARGET    
 };
+
+/* instrumentations */
+typedef struct InstrumentContext  {
+    unsigned memfext;  /* this is the flag representing the instrumentation by the client */
+    unsigned btarget;  /* this is the flag to indicate instrumenting the branch target */
+} InstrumentContext;
    
 
 /// ------------------------------------------------ ///
@@ -131,7 +138,6 @@ enum
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
 
-
 /* qtrace memory tracing related stuff */
 #define QTRACE_MEMTRACE_BITS  (4)
 #define QTRACE_MEMTRACE_NONE  (0)
@@ -141,6 +147,9 @@ enum
 #define QTRACE_MEMTRACE_BVAL  (1<<3)     /* IPOINT_BEFORE value */
 #define QTRACE_MEMTRACE_AVAL  (1<<4)     /* IPOINT_AFTER  value */
 #define QTRACE_MEMTRACE_MSIZE (1<<5)     /* IPOINT_AFTER  value */
+
+/* QTRACE branch related */
+#define QTRACE_BRANCH_TARGET  (1<<6)   
 
 #define QTRACE_ADD_MEMTRACE(index, tracex)   (((index) | (tracex << QTRACE_MEMTRACE_BITS))) 
 #define QTRACE_EXT_MEMTRACE(index)           ((index >> QTRACE_MEMTRACE_BITS)) 

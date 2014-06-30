@@ -83,7 +83,7 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 #define QTRACE_CLIENT_MODULE(s)                           do {  \
    /* call instruction instrumentation routine */            \
    qtrace_invoke_instruction_callback(s->qtrace_insnflags);  \
-   s->qtrace_insncallback = true;                            \
+   s->qtrace_insncb = true;                            \
 } while(0);
 
 
@@ -143,11 +143,14 @@ typedef struct DisasContext {
 
     /* For QTRACE */
     unsigned qtrace_insnflags;
-    unsigned qtrace_insncallback;
+    unsigned qtrace_insncb;
     QTraceFlags *iflags;
 
     unsigned memfext;  /* this is the flag representing the instrumentation by the client */
+    unsigned btarget;  /* this is the flag to indicate instrumenting the branch target */
 } DisasContext;
+
+extern InstrumentContext icontext;
 
 /* For QTrace */
 ///static DisasContext stmp;
@@ -2448,6 +2451,7 @@ static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
 
     pc = s->cs_base + eip;
     tb = s->tb;
+#if 1 
     /* NOTE: we handle the case where the TB spans two pages here */
     if ((pc & TARGET_PAGE_MASK) == (tb->pc & TARGET_PAGE_MASK) ||
         (pc & TARGET_PAGE_MASK) == ((s->pc - 1) & TARGET_PAGE_MASK))  {
@@ -2456,10 +2460,13 @@ static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
         gen_jmp_im(eip);
         tcg_gen_exit_tb((uintptr_t)tb + tb_num);
     } else {
+#endif
         /* jump to another page: currently not optimized */
         gen_jmp_im(eip);
         gen_eob(s);
+#if 1
     }
+#endif
 }
 
 static inline void gen_jcc(DisasContext *s, int b,
@@ -5288,7 +5295,12 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_eob(s);
             break;
         case 4: /* jmp Ev */
+            /* QEMU does not optimize indirect jump */
             QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_JMP);
+            QTRACE_CLIENT_MODULE(s);
+
+            if (icontext.btarget) printf("generating btarget code\n");
+
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
             gen_op_jmp_T0();
@@ -5297,7 +5309,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         case 5: /* ljmp Ev */
             gen_op_ld_T1_A0(ot + s->mem_index, s);
             gen_add_A0_im(s, 1 << (ot - OT_WORD + 1));
-            gen_op_ldu_T0_A0(OT_WORD + s->mem_index,s );
+            gen_op_ldu_T0_A0(OT_WORD + s->mem_index, s);
         do_ljmp:
             if (s->pe && !s->vm86) {
                 gen_update_cc_op(s);
@@ -8594,10 +8606,10 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         if (is_kern) QTRACE_ADD_FLAG(dc, QTRACE_IS_KERN);
         if (is_user) QTRACE_ADD_FLAG(dc, QTRACE_IS_USER);
 
-        dc->qtrace_insncallback = false;
+        dc->qtrace_insncb = false;
         pc_ptr = disas_insn(env, dc, pc_ptr);
 
-        /* qtrace_insncallback should have been set to true at this point*/
+        /* qtrace_insncb should have been set to true at this point*/
         num_insns++;
         /* stop translation if indicated */
         if (dc->is_jmp)
