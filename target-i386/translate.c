@@ -147,7 +147,6 @@ typedef struct DisasContext {
     QTraceFlags *iflags;
 
     unsigned memfext;  /* this is the flag representing the instrumentation by the client */
-    unsigned btarget;  /* this is the flag to indicate instrumenting the branch target */
 } DisasContext;
 
 extern InstrumentContext icontext;
@@ -522,6 +521,11 @@ static inline void gen_op_addl_T0_T1(void)
 static inline void gen_op_jmp_T0(void)
 {
     tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, eip));
+}
+
+static inline void qtrace_gen_push_btarget_T0(void)
+{
+    if (icontext.btarget) tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, qtrace_btarget));
 }
 
 static inline void gen_op_add_reg_im(int size, int reg, int32_t val)
@@ -5296,13 +5300,16 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             break;
         case 4: /* jmp Ev */
             /* QEMU does not optimize indirect jump */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_JMP);
+            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH | QTRACE_IS_INDIRECT);
             QTRACE_CLIENT_MODULE(s);
-
-            if (icontext.btarget) printf("generating btarget code\n");
 
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
+
+            /* QTRACE. get branch target */
+            qtrace_gen_push_btarget_T0(); 
+            gen_helper_qtrace_entry(cpu_env, tcg_const_i64(icontext.ifun));
+
             gen_op_jmp_T0();
             gen_eob(s);
             break;
@@ -8607,7 +8614,14 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         if (is_user) QTRACE_ADD_FLAG(dc, QTRACE_IS_USER);
 
         dc->qtrace_insncb = false;
+        QTRACE_RESET_FLAG(dc);
         pc_ptr = disas_insn(env, dc, pc_ptr);
+
+        /* QTRACE. generate call to the instrumentation function */
+        if (icontext.ifun) 
+        {
+
+        }
 
         /* qtrace_insncb should have been set to true at this point*/
         num_insns++;

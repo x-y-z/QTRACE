@@ -3,6 +3,8 @@
 
 #define PRINT_FREQ 100000
 
+#define __cdecl __attribute__((__cdecl__))
+
 static int usercount = 0;
 static int kerncount = 0;
 static int totlcount = 0;
@@ -20,8 +22,11 @@ void IBB_InsertCall(QTRACE_INSERT_INSTRUMENT_CALLBACK ibb_insertcall_func)
     Module_IBB_InsertCall = ibb_insertcall_func;
 }
 
-QTRACE_LOCAL_FUN void CacheSim(void* vma, void *pma, unsigned msize)
+void CacheSim(void* vma, void *pma, unsigned msize)  __attribute__((cdecl));
+
+void __attribute__((cdecl)) CacheSim(void* vma, void *pma, unsigned msize)
 {
+   printf("vma is 0x%lx pma is 0x%lx msize is %d\n", vma, pma, msize);
 }
 
 void InstructionCallBack(unsigned type)
@@ -38,11 +43,11 @@ void InstructionCallBack(unsigned type)
     }
 #endif 
 
-    if (QTRACE_TEST_BRANCH(type))
+    if (QTRACE_TEST_BRANCH(type) && QTRACE_TEST_INDIRECT(type))
     {
        Module_INS_InsertCall(4, 
                              QTRACE_IPOINT_BEFORE, 
-                             QTRACE_IFUN, 0, 
+                             QTRACE_IFUN, CacheSim, 
                              QTRACE_BRANCH_TARGET);
  
     }

@@ -605,6 +605,7 @@ typedef uint32_t FeatureWordArray[FEATURE_WORDS];
 #include "qtrace.h"
 
 #define QTRACE_ADD_FLAG(s,flag) s->qtrace_insnflags|=(flag);
+#define QTRACE_RESET_FLAG(s)    s->qtrace_insnflags=0;
 
 typedef enum {
     CC_OP_DYNAMIC, /* must use dynamic code to get cc_op */

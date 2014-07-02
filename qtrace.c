@@ -87,8 +87,27 @@ static void qtrace_instrument(unsigned pos, ...)
   /// printf("pos is %d\n", pos);
   for (idx=0;idx<pos;idx++) 
   {
-     icontext.btarget = (va_arg(arguments, unsigned) == QTRACE_BRANCH_TARGET);
+     unsigned arg = va_arg(arguments, unsigned);
+     switch (arg)
+     {
+     case QTRACE_IFUN:
+        icontext.ifun = va_arg(arguments, uintptr_t);
+        ++idx;
+        break;
+     case QTRACE_BRANCH_TARGET:
+        icontext.btarget = true;
+     default:
+        break;
+     }
   }
+#if 0
+
+        if (icontext.ifun) 
+        {
+           printf("hello\n"); 
+        }
+#endif
+
   ///printf("%d\n", va_arg(arguments, unsigned));
   va_end (arguments);          
 }

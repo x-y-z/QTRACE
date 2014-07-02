@@ -20,6 +20,8 @@
 #ifndef QTRACE_H
 #define QTRACE_H
 
+#include <stdint.h>
+
 /// ------------------------------------------------ ///
 /// instrumentation prototypes. 
 /// ------------------------------------------------ ///
@@ -78,8 +80,9 @@ enum
 
 /* instrumentations */
 typedef struct InstrumentContext  {
-    unsigned memfext;  /* this is the flag representing the instrumentation by the client */
-    unsigned btarget;  /* this is the flag to indicate instrumenting the branch target */
+    uintptr_t ifun;     /* instrumentation function */
+    unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
+    unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
 } InstrumentContext;
    
 
@@ -111,6 +114,7 @@ typedef struct InstrumentContext  {
 #define QTRACE_IS_VIRT            (1<<22)
 #define QTRACE_IS_RDTSC           (1<<23)
 #define QTRACE_IS_ARITHLOGIC      (1<<24)
+#define QTRACE_IS_INDIRECT        (1<<25)
 
 #define QTRACE_TEST_FETCH(X)      ((X&QTRACE_IS_FETCH)>0)
 #define QTRACE_TEST_STORE(X)      ((X&QTRACE_IS_STORE)>0)
@@ -137,6 +141,7 @@ typedef struct InstrumentContext  {
 #define QTRACE_TEST_VIRT(X)       ((X&QTRACE_IS_VIRT)>0)
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
+#define QTRACE_TEST_INDIRECT(X)   ((X&QTRACE_IS_INDIRECT)>0) 
 
 /* qtrace memory tracing related stuff */
 #define QTRACE_MEMTRACE_BITS  (4)
