@@ -23,70 +23,6 @@
 #include <stdint.h>
 
 /// ------------------------------------------------ ///
-/// instrumentation prototypes. 
-/// ------------------------------------------------ ///
-typedef 
-void (*INSTRUCTION_CALLBACK)(unsigned);
-
-typedef 
-void (*IBASICBLOCK_CALLBACK)(unsigned);
-
-typedef 
-void 
-(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
-
-typedef 
-void 
-(*QTRACE_MODULE_FUNC_INIT)(QTRACE_INSERT_INSTRUMENT_CALLBACK);
-
-/// ------------------------------------------------ ///
-/// instrumentation module metadata 
-/// ------------------------------------------------ ///
-struct instructionRtn { INSTRUCTION_CALLBACK rtn; struct InstructionRtn *next; };
-typedef struct instructionRtn InstructionRtn;
-
-struct iBasicBlockRtn { IBASICBLOCK_CALLBACK rtn; struct IBasicBlockRtn *next; };
-typedef struct iBasicBlockRtn IBasicBlockRtn;
-
-/* list to keep all the instruction and basicblock level instrumentation */
-extern InstructionRtn* icb_head;
-extern IBasicBlockRtn* ibb_head;
-
-/// ------------------------------------------------ ///
-/// instrumentation function list
-/// ------------------------------------------------ ///
-void qtrace_instrument_parse(const char*);
-void qtrace_invoke_instruction_callback(unsigned arg0);
-
-
-/// ------------------------------------------------ ///
-/// miscellaneous 
-/// ------------------------------------------------ ///
-#define QTRACE_EXIT  exit
-#define QTRACE_ERROR printf
-#define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
-#define QTRACE_LOCAL_FUN  static
-
-enum 
-{
-   QTRACE_IPOINT_BEFORE=1  ,
-   QTRACE_IPOINT_AFTER     ,
-   QTRACE_IFUN             ,
-   QTRACE_MEMORY_VMA       ,
-   QTRACE_MEMORY_PMA       ,
-   QTRACE_MEMORY_SIZE      ,
-   QTRACE_BRANCH_TARGET    
-};
-
-/* instrumentations */
-typedef struct InstrumentContext  {
-    uintptr_t ifun;     /* instrumentation function */
-    unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
-    unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
-} InstrumentContext;
-   
-
-/// ------------------------------------------------ ///
 /// instruction types. 
 /// ------------------------------------------------ ///
 #define QTRACE_IS_FETCH           (1<<0)
@@ -143,18 +79,78 @@ typedef struct InstrumentContext  {
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
 #define QTRACE_TEST_INDIRECT(X)   ((X&QTRACE_IS_INDIRECT)>0) 
 
+
+/// ------------------------------------------------ ///
+/// instrumentation prototypes. 
+/// ------------------------------------------------ ///
+typedef 
+void (*INSTRUCTION_CALLBACK)(unsigned);
+
+typedef 
+void (*IBASICBLOCK_CALLBACK)(unsigned);
+
+typedef 
+void 
+(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
+
+typedef 
+void 
+(*QTRACE_MODULE_FUNC_INIT)(QTRACE_INSERT_INSTRUMENT_CALLBACK);
+
+/// ------------------------------------------------ ///
+/// instrumentation module metadata 
+/// ------------------------------------------------ ///
+struct instructionRtn { INSTRUCTION_CALLBACK rtn; struct instructionRtn *next; };
+typedef struct instructionRtn InstructionRtn;
+
+struct iBasicBlockRtn { IBASICBLOCK_CALLBACK rtn; struct iBasicBlockRtn *next; };
+typedef struct iBasicBlockRtn IBasicBlockRtn;
+
+/* list to keep all the instruction and basicblock level instrumentation */
+extern InstructionRtn* icb_head;
+extern IBasicBlockRtn* ibb_head;
+
+/// ------------------------------------------------ ///
+/// instrumentation function list
+/// ------------------------------------------------ ///
+void qtrace_instrument_parser(unsigned pos, ...); 
+void qtrace_instrument_setup(const char*);
+void qtrace_invoke_instruction_callback(unsigned arg);
+
+
+/// ------------------------------------------------ ///
+/// miscellaneous 
+/// ------------------------------------------------ ///
+#define QTRACE_EXIT  exit
+#define QTRACE_ERROR printf
+#define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
+#define QTRACE_LOCAL_FUN  static
+
+/* instrumentations */
+typedef struct InstrumentContext  {
+    uintptr_t ifun;     /* instrumentation function */
+    unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
+    unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
+} InstrumentContext;
+   
+
 /* qtrace memory tracing related stuff */
 #define QTRACE_MEMTRACE_BITS  (4)
 #define QTRACE_MEMTRACE_NONE  (0)
 #define QTRACE_MEMTRACE_VMA   (1<<0)
 #define QTRACE_MEMTRACE_PMA   (1<<1) 
-#define QTRACE_MEMTRACE_VPMA  (1<<2)
+#define QTRACE_MEMTRACE_VPMA  (QTRACE_MEMTRACE_VMA | QTRACE_MEMTRACE_PMA)
+#define QTRACE_MEMTRACE_MSIZE (1<<2)     /* IPOINT_AFTER  value */
 #define QTRACE_MEMTRACE_BVAL  (1<<3)     /* IPOINT_BEFORE value */
 #define QTRACE_MEMTRACE_AVAL  (1<<4)     /* IPOINT_AFTER  value */
-#define QTRACE_MEMTRACE_MSIZE (1<<5)     /* IPOINT_AFTER  value */
 
 /* QTRACE branch related */
-#define QTRACE_BRANCH_TARGET  (1<<6)   
+#define QTRACE_BRANCH_TARGET  (1<<5)   
+
+/* QTRACE instrumentation function */
+#define QTRACE_IFUN  	      (1<<6)
+#define QTRACE_IPOINT_BEFORE  (1<<7)
+#define QTRACE_IPOINT_AFTER   (1<<8)
 
 #define QTRACE_ADD_MEMTRACE(index, tracex)   (((index) | (tracex << QTRACE_MEMTRACE_BITS))) 
 #define QTRACE_EXT_MEMTRACE(index)           ((index >> QTRACE_MEMTRACE_BITS)) 

@@ -1120,6 +1120,7 @@ static inline void tcg_out_tlb_load(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
     /* jne slow_path */
     tcg_out_opc(s, OPC_JCC_long + JCC_JNE, 0, 0, 0);
     label_ptr[0] = s->code_ptr;
+
     s->code_ptr += 4;
 
     if (TARGET_LONG_BITS > TCG_TARGET_REG_BITS) {
@@ -1210,7 +1211,6 @@ static inline void tcg_out_tlb_load_trace_vma(TCGContext *s, TCGReg addrlo, TCGR
     tcg_out_modrm_offset(s, OPC_ADD_GvEv + hrexw, r1, r0,
                          offsetof(CPUTLBEntry, addend) - which);
 }
-
 
 static inline void tcg_out_tlb_load_trace_pma(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
                                               int mem_index, TCGMemOp s_bits,
@@ -1648,7 +1648,7 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     int mem_index;
     int mem_trace;
     TCGMemOp s_bits;
-    uint8_t *label_ptr[2];
+    uint8_t *label_ptr[2] = { 0, 0 };
 #endif
 
     datalo = *args++;
@@ -1672,7 +1672,7 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
                             offsetof(CPUArchState, qtrace_msize));
     }
 
-    switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
+    switch(mem_trace)
     {
     case QTRACE_MEMTRACE_NONE:
        tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
@@ -1687,7 +1687,7 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
        tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
        break;
     default:
-       assert(0 && "QTRACE not implemented");
+       perror("QTRACE not implemented");
        break;
     }
 

@@ -3020,7 +3020,7 @@ int main(int argc, char **argv, char **envp)
                 }
             case QEMU_OPTION_instrument:
                 /* QTRACE module */
-                qtrace_instrument_parse(optarg);
+                qtrace_instrument_setup(optarg);
                 break;
             case QEMU_OPTION_hdb:
             case QEMU_OPTION_hdc:

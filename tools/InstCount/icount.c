@@ -31,18 +31,17 @@ void __attribute__((cdecl)) CacheSim(void* vma, void *pma, unsigned msize)
 
 void InstructionCallBack(unsigned type)
 {
-#if 0
+#if 1 
     if (QTRACE_TEST_FETCH(type))
     {
        Module_INS_InsertCall(5, 
                              QTRACE_IPOINT_BEFORE, 
-                             QTRACE_IFUN, 0, 
-                             QTRACE_MEMORY_VMA, 
-                             QTRACE_MEMORY_PMA, 
-                             QTRACE_MEMORY_SIZE);
+                             QTRACE_IFUN, CacheSim, 
+                             QTRACE_MEMTRACE_VMA, 
+                             QTRACE_MEMTRACE_PMA, 
+                             QTRACE_MEMTRACE_MSIZE);
     }
-#endif 
-
+#else
     if (QTRACE_TEST_BRANCH(type) && QTRACE_TEST_INDIRECT(type))
     {
        Module_INS_InsertCall(4, 
@@ -51,4 +50,5 @@ void InstructionCallBack(unsigned type)
                              QTRACE_BRANCH_TARGET);
  
     }
+#endif 
 }

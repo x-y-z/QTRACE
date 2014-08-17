@@ -635,14 +635,14 @@ static inline void gen_op_lds_T0_A0(int idx, DisasContext *s)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     default:
     case OT_LONG:
-        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     }
 }
@@ -652,19 +652,19 @@ static inline void gen_op_ld_v(int idx, TCGv t0, TCGv a0, DisasContext *s)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     case OT_LONG:
-        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     default:
     case OT_QUAD:
         /* Should never happen on 32-bit targets.  */
 #ifdef TARGET_X86_64
-        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
 #endif
         break;
     }
@@ -691,19 +691,19 @@ static inline void gen_op_st_v(int idx, TCGv t0, TCGv a0, DisasContext *s)
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_st8(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_st8(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_st16(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_st16(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     case OT_LONG:
-        tcg_gen_qemu_st32(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_st32(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
         break;
     default:
     case OT_QUAD:
         /* Should never happen on 32-bit targets.  */
 #ifdef TARGET_X86_64
-        tcg_gen_qemu_st64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, s->memfext));
+        tcg_gen_qemu_st64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
 #endif
         break;
     }
