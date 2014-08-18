@@ -1670,6 +1670,7 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
        tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
                             TCG_REG_L0, TCG_AREG0, 
                             offsetof(CPUArchState, qtrace_msize));
+       CLEAR_QTRACE_MEMTRACE_MSIZE(mem_trace);
     }
 
     switch(mem_trace)
@@ -1894,6 +1895,7 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
        tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
                             TCG_REG_L0, TCG_AREG0, 
                             offsetof(CPUArchState, qtrace_msize));
+       CLEAR_QTRACE_MEMTRACE_MSIZE(mem_trace);
     }
 
     switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
@@ -2646,8 +2648,39 @@ void tcg_register_jit(void *buf, size_t buf_size)
 
 void tcg_qtrace_instrument_call(TCGContext *s)
 {
-    tcg_out_modrm_offset(s, OPC_MOVL_GvEv, tcg_target_call_iarg_regs[0], TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
-    tcg_out_calli(s, (uintptr_t)icontext.ifun);
+    unsigned idx = 0, ciarg = icontext.ciarg;
+
+    /* setup arguments for call one-by-one */
+    for(idx = 0; idx < ciarg; ++idx)
+    {
+        switch(icontext.iargs[idx])
+        {
+        case QTRACE_MEMTRACE_VMA:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_vma));
+             break;
+        case QTRACE_MEMTRACE_PMA:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_pma));
+             break;
+        case QTRACE_MEMTRACE_MSIZE:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_msize));
+             break;
+        default:
+             break;
+        }
+    }
+
+    /* lastly, make the call */
+    uintptr_t ifun = icontext.ifun;
+    tcg_out_calli(s, (uintptr_t)ifun);
 #if 0
     /* The second argument is already loaded with addrlo.  */
     tcg_out_movi(s, TCG_TYPE_I32, tcg_target_call_iarg_regs[2],

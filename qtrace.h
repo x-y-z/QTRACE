@@ -125,10 +125,13 @@ void qtrace_invoke_instruction_callback(unsigned arg);
 #define QTRACE_ERROR printf
 #define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
 #define QTRACE_LOCAL_FUN  static
+#define QTRACE_MAX_IARGS  16
 
 /* instrumentations */
 typedef struct InstrumentContext  {
     uintptr_t ifun;     /* instrumentation function */
+    unsigned  ciarg;    /* current iarg */
+    unsigned  iargs[QTRACE_MAX_IARGS]; /* instrumentation args */
     unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
     unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
 } InstrumentContext;
@@ -161,6 +164,7 @@ typedef struct InstrumentContext  {
 #define IS_QTRACE_MEMTRACE_BVAL(x)    (x & QTRACE_MEMTRACE_BVAL)
 #define IS_QTRACE_MEMTRACE_AVAL(x)    (x & QTRACE_MEMTRACE_AVAL)
 #define IS_QTRACE_MEMTRACE_MSIZE(x)   (x & QTRACE_MEMTRACE_MSIZE)
+#define CLEAR_QTRACE_MEMTRACE_MSIZE(x)   (x &= (~QTRACE_MEMTRACE_MSIZE))
 
 
 #endif /* QTRACE_H */

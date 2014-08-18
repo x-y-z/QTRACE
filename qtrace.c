@@ -103,6 +103,9 @@ void qtrace_instrument_parser(unsigned pos, ...)
   	va_list arguments;                  
   	va_start(arguments, pos);         
 
+        /* reset icontext */
+        memset(&icontext, 0x0, sizeof(InstrumentContext));
+
 	unsigned idx=0;
   	for (idx=0;idx<pos;idx++) 
   	{
@@ -118,12 +121,17 @@ void qtrace_instrument_parser(unsigned pos, ...)
 		case QTRACE_MEMTRACE_VMA:
 		case QTRACE_MEMTRACE_PMA:
 		case QTRACE_MEMTRACE_VPMA:
-		case QTRACE_MEMTRACE_MSIZE:
+                        icontext.iargs[icontext.ciarg++] = arg;
 			icontext.memfext |= arg;
 			break;
 		/* branch instrumentation */
      		case QTRACE_BRANCH_TARGET:
+                        icontext.iargs[icontext.ciarg++] = arg;
         		icontext.btarget = true;
+			break;
+		case QTRACE_MEMTRACE_MSIZE:
+                        icontext.iargs[icontext.ciarg++] = arg;
+			icontext.memfext |= arg;
 			break;
      		default:
         		break;

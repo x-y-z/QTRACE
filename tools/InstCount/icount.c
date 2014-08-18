@@ -34,7 +34,7 @@ void InstructionCallBack(unsigned type)
 #if 1 
     if (QTRACE_TEST_FETCH(type))
     {
-       Module_INS_InsertCall(5, 
+       Module_INS_InsertCall(6, 
                              QTRACE_IPOINT_BEFORE, 
                              QTRACE_IFUN, CacheSim, 
                              QTRACE_MEMTRACE_VMA, 
