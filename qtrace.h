@@ -138,14 +138,26 @@ typedef struct InstrumentContext  {
    
 
 /* qtrace memory tracing related stuff */
-#define QTRACE_MEMTRACE_BITS  (4)
-#define QTRACE_MEMTRACE_NONE  (0)
-#define QTRACE_MEMTRACE_VMA   (1<<0)
-#define QTRACE_MEMTRACE_PMA   (1<<1) 
-#define QTRACE_MEMTRACE_VPMA  (QTRACE_MEMTRACE_VMA | QTRACE_MEMTRACE_PMA)
-#define QTRACE_MEMTRACE_MSIZE (1<<2)     /* IPOINT_AFTER  value */
-#define QTRACE_MEMTRACE_BVAL  (1<<3)     /* IPOINT_BEFORE value */
-#define QTRACE_MEMTRACE_AVAL  (1<<4)     /* IPOINT_AFTER  value */
+#define QTRACE_MEMTRACE_BITS  		(4)
+#define QTRACE_MEMTRACE_NONE  		(0)
+#define QTRACE_MEMTRACE_VMA   		(1<<0)
+#define QTRACE_MEMTRACE_PMA   		(1<<1) 
+#define QTRACE_MEMTRACE_VPMA  		(QTRACE_MEMTRACE_VMA | QTRACE_MEMTRACE_PMA)
+#define QTRACE_MEMTRACE_MSIZE 		(1<<2)     
+#define QTRACE_MEMTRACE_VALUE 		(1<<3)   
+
+#define RESET_QTRACE_MEMTRACE_ADDRS(x)	(x &= (~QTRACE_MEMTRACE_VPMA)) 
+#define RESET_QTRACE_MEMTRACE_MSIZE(x)  (x &= (~QTRACE_MEMTRACE_MSIZE))
+#define RESET_QTRACE_MEMTRACE_VALUE(x)  (x &= (~QTRACE_MEMTRACE_VALUE))
+
+#define QTRACE_MEMTRACE_EXT_ADDRS(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VPMA);  RESET_QTRACE_MEMTRACE_ADDRS(x); i;})
+#define QTRACE_MEMTRACE_EXT_MSIZE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_MSIZE); RESET_QTRACE_MEMTRACE_MSIZE(x); i;})
+#define QTRACE_MEMTRACE_EXT_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VALUE); RESET_QTRACE_MEMTRACE_VALUE(x); i;})
+
+#define QTRACE_ADD_MEMTRACE(index,x)    (((index) | (x << QTRACE_MEMTRACE_BITS))) 
+#define QTRACE_EXT_MEMTRACE(index)      ((index >> QTRACE_MEMTRACE_BITS)) 
+#define QTRACE_EXT_MEMINDEX(index)      ((index & ((1<<QTRACE_MEMTRACE_BITS)-1))) 
+
 
 /* QTRACE branch related */
 #define QTRACE_BRANCH_TARGET  (1<<5)   
@@ -155,16 +167,7 @@ typedef struct InstrumentContext  {
 #define QTRACE_IPOINT_BEFORE  (1<<7)
 #define QTRACE_IPOINT_AFTER   (1<<8)
 
-#define QTRACE_ADD_MEMTRACE(index, tracex)   (((index) | (tracex << QTRACE_MEMTRACE_BITS))) 
-#define QTRACE_EXT_MEMTRACE(index)           ((index >> QTRACE_MEMTRACE_BITS)) 
-#define QTRACE_EXT_MEMINDEX(index)           ((index & ((1<<QTRACE_MEMTRACE_BITS)-1))) 
-#define QTRACE_EXT_MEMADDTRACE(index)        ((index & 7))
 
-
-#define IS_QTRACE_MEMTRACE_BVAL(x)    (x & QTRACE_MEMTRACE_BVAL)
-#define IS_QTRACE_MEMTRACE_AVAL(x)    (x & QTRACE_MEMTRACE_AVAL)
-#define IS_QTRACE_MEMTRACE_MSIZE(x)   (x & QTRACE_MEMTRACE_MSIZE)
-#define CLEAR_QTRACE_MEMTRACE_MSIZE(x)   (x &= (~QTRACE_MEMTRACE_MSIZE))
 
 
 #endif /* QTRACE_H */

@@ -1650,6 +1650,7 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     TCGMemOp s_bits;
     uint8_t *label_ptr[2] = { 0, 0 };
 #endif
+    unsigned maddrs = 0;
 
     datalo = *args++;
     datahi = (TCG_TARGET_REG_BITS == 32 && is64 ? *args++ : 0);
@@ -1664,43 +1665,42 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     s_bits = opc & MO_SIZE;
 
     /* record the size */
-    if (IS_QTRACE_MEMTRACE_MSIZE(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_MSIZE(mem_trace)) 
     {
        tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
-                            TCG_REG_L0, TCG_AREG0, 
-                            offsetof(CPUArchState, qtrace_msize));
-       CLEAR_QTRACE_MEMTRACE_MSIZE(mem_trace);
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_msize));
     }
 
-    switch(mem_trace)
+    if ((maddrs = (QTRACE_MEMTRACE_EXT_ADDRS(mem_trace))))
     {
-    case QTRACE_MEMTRACE_NONE:
+       switch(maddrs)
+       {
+       case QTRACE_MEMTRACE_VMA:
+            tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
+            break;
+       case QTRACE_MEMTRACE_PMA:
+            tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
+            break;
+       case QTRACE_MEMTRACE_VPMA:
+            tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
+            break;
+       default:
+            perror("QTRACE not implemented memory tracing");
+            break;
+       }
+    }
+    else 
+    {
        tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
-       break;
-    case QTRACE_MEMTRACE_VMA:
-       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
-       break;
-    case QTRACE_MEMTRACE_PMA:
-       tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
-       break;
-    case QTRACE_MEMTRACE_VPMA:
-       tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
-       break;
-    default:
-       perror("QTRACE not implemented");
-       break;
     }
 
     /* TLB Hit.  */
     tcg_out_qemu_ld_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* Record the loaded value */
-    if (IS_QTRACE_MEMTRACE_BVAL(mem_trace) || IS_QTRACE_MEMTRACE_AVAL(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
     {
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
-                            datalo, TCG_AREG0, 
-                            offsetof(CPUArchState, qtrace_bval));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_value));
     }
 
     /* Record the current context of a load into ldst label */
@@ -1876,6 +1876,8 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     uint8_t *label_ptr[2];
 #endif
 
+    unsigned maddrs = 0;
+
     datalo = *args++;
     datahi = (TCG_TARGET_REG_BITS == 32 && is64 ? *args++ : 0);
     addrlo = *args++;
@@ -1889,48 +1891,50 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     s_bits = opc & MO_SIZE;
 
     /* record the size */
-    if (IS_QTRACE_MEMTRACE_MSIZE(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_MSIZE(mem_trace)) 
     {
        tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, 
-                            TCG_REG_L0, TCG_AREG0, 
-                            offsetof(CPUArchState, qtrace_msize));
-       CLEAR_QTRACE_MEMTRACE_MSIZE(mem_trace);
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_msize));
     }
 
-    switch(QTRACE_EXT_MEMADDTRACE(mem_trace))
+    /* record the memory address */
+    if ((maddrs=QTRACE_MEMTRACE_EXT_ADDRS(mem_trace)))
     {
-    case QTRACE_MEMTRACE_NONE:
+       switch(maddrs)
+       {
+       case QTRACE_MEMTRACE_VMA:
+            tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
+            break;
+       case QTRACE_MEMTRACE_PMA:
+            tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
+            break;
+       case QTRACE_MEMTRACE_VPMA:
+            tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
+            break;
+       default:
+            perror("QTRACE not implemented memory tracing");
+            break;
+       }
+    } 
+    else 
+    {
        tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
-       break;
-    case QTRACE_MEMTRACE_VMA:
-       tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
-       break;
-    case QTRACE_MEMTRACE_PMA:
-       tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
-       break;
-    case QTRACE_MEMTRACE_VPMA:
-       tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
-       break;
-    default:
-       assert(0 && "QTRACE not implemented");
-       break;
     }
 
     /* record the value before store */
-    if (IS_QTRACE_MEMTRACE_BVAL(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
     {
        tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_REG_L1, 0, 0, opc);
-       tcg_out_qemu_st_direct_trace(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_bval), 0, opc);
+       tcg_out_qemu_st_direct_trace(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_value), 0, opc);
     }
 
     /* TLB Hit.  */
     tcg_out_qemu_st_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* record the value after store */
-    if (IS_QTRACE_MEMTRACE_AVAL(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
     { 
-       tcg_out_qemu_st_direct_trace(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_aval), 0, opc);
+       tcg_out_qemu_st_direct_trace(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_value), 0, opc);
     }
 
     /* Record the current context of a store into ldst label */

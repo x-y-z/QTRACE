@@ -118,9 +118,11 @@ void qtrace_instrument_parser(unsigned pos, ...)
         		++idx;
         		break;
 		/* memory address instrumentation */
+		case QTRACE_MEMTRACE_MSIZE:
 		case QTRACE_MEMTRACE_VMA:
 		case QTRACE_MEMTRACE_PMA:
 		case QTRACE_MEMTRACE_VPMA:
+		case QTRACE_MEMTRACE_VALUE:
                         icontext.iargs[icontext.ciarg++] = arg;
 			icontext.memfext |= arg;
 			break;
@@ -128,10 +130,6 @@ void qtrace_instrument_parser(unsigned pos, ...)
      		case QTRACE_BRANCH_TARGET:
                         icontext.iargs[icontext.ciarg++] = arg;
         		icontext.btarget = true;
-			break;
-		case QTRACE_MEMTRACE_MSIZE:
-                        icontext.iargs[icontext.ciarg++] = arg;
-			icontext.memfext |= arg;
 			break;
      		default:
         		break;

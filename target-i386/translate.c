@@ -255,14 +255,6 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_CLR] = 0,
 };
 
-
-static void qtrace_xlate_flags(DisasContext *s)
-{
-   s->memfext |= QTRACE_MEMTRACE_VPMA;
-   s->memfext |= QTRACE_MEMTRACE_BVAL; 
-   s->memfext |= QTRACE_MEMTRACE_AVAL; 
-}
-
 static void set_cc_op(DisasContext *s, CCOp op)
 {
     int dead;
@@ -5733,8 +5725,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* add the flags for this instruction and call the instrumentation module */
         QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
         QTRACE_CLIENT_MODULE(s);
-
-        qtrace_xlate_flags(s);
 
         /* generate a generic store */
         gen_ldst_modrm(env, s, modrm, ot, reg, 1);
