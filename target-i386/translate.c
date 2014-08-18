@@ -86,6 +86,15 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
    s->qtrace_insncb = true;                            \
 } while(0);
 
+/* generate the pre-insruction instrumentation */
+#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          do {  \
+   tcg_gen_op0(INDEX_op_qtrace_icall);                                 \
+} while(0);
+
+/* generate the post-insruction instrumentation */
+#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         do {  \
+   tcg_gen_op0(INDEX_op_qtrace_icall);                                 \
+} while(0);
 
 #include "exec/gen-icount.h"
 
@@ -148,8 +157,6 @@ typedef struct DisasContext {
 
     unsigned memfext;  /* this is the flag representing the instrumentation by the client */
 } DisasContext;
-
-extern InstrumentContext icontext;
 
 /* For QTrace */
 ///static DisasContext stmp;
@@ -5308,7 +5315,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
             /* QTRACE. get branch target */
             qtrace_gen_push_btarget_T0(); 
-            gen_helper_qtrace_entry(cpu_env, tcg_const_i64(icontext.ifun));
+            ///gen_helper_qtrace_entry(cpu_env, tcg_const_i64(icontext.ifun));
 
             gen_op_jmp_T0();
             gen_eob(s);
@@ -5777,8 +5784,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
         QTRACE_CLIENT_MODULE(s);
 
+        /* generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 0);
         gen_op_mov_reg_T0(ot, reg);
+
+        /* generate the post-inst instrumentation */
+        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
         break;
     case 0x8e: /* mov seg, Gv */
         /* Move r/m16 to segment register. */

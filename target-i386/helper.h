@@ -44,7 +44,6 @@ DEF_HELPER_2(lmsw, void, env, tl)
 DEF_HELPER_1(clts, void, env)
 DEF_HELPER_3(movl_drN_T0, void, env, int, tl)
 DEF_HELPER_2(invlpg, void, env, tl)
-DEF_HELPER_2(qtrace_entry, void, env, i64)
 
 DEF_HELPER_4(enter_level, void, env, int, int, tl)
 #ifdef TARGET_X86_64

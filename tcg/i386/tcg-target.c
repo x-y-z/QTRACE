@@ -1976,6 +1976,9 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
 #endif
 
     switch(opc) {
+    case INDEX_op_qtrace_icall:
+        tcg_qtrace_instrument_call(s);
+	break;
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_EAX, args[0]);
         tcg_out_jmp(s, (uintptr_t)tb_ret_addr);
@@ -2640,3 +2643,16 @@ void tcg_register_jit(void *buf, size_t buf_size)
     tcg_register_jit_int(buf, buf_size, &debug_frame, sizeof(debug_frame));
 }
 #endif
+
+void tcg_qtrace_instrument_call(TCGContext *s)
+{
+    tcg_out_modrm_offset(s, OPC_MOVL_GvEv, tcg_target_call_iarg_regs[0], TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
+    tcg_out_calli(s, (uintptr_t)icontext.ifun);
+#if 0
+    /* The second argument is already loaded with addrlo.  */
+    tcg_out_movi(s, TCG_TYPE_I32, tcg_target_call_iarg_regs[2],
+                 l->mem_index);
+    tcg_out_movi(s, TCG_TYPE_PTR, tcg_target_call_iarg_regs[3],
+                (uintptr_t)l->raddr);
+#endif
+}

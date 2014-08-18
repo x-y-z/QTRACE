@@ -25,8 +25,6 @@
 #include "exec/softmmu_exec.h"
 #endif /* !defined(CONFIG_USER_ONLY) */
 
-extern InstrumentContext icontext;
-
 /* check if Port I/O is allowed in TSS */
 static inline void check_io(CPUX86State *env, int addr, int size)
 {
@@ -225,25 +223,6 @@ void helper_invlpg(CPUX86State *env, target_ulong addr)
 {
     cpu_svm_check_intercept_param(env, SVM_EXIT_INVLPG, 0);
     tlb_flush_page(env, addr);
-}
-
-void helper_qtrace_entry(CPUX86State *env, uint64_t ifun)
-{
-   if (!ifun) 
-   {
-   printf("target_ulong addr is 0x%lx\n", (long int) ifun);
-   }
-   else 
-   {
-     /* set up the arguments on stack */
-
-   }
-
-   //__asm__("call ifun");
-   asm("call *%0" : : "r"(ifun));
-
-   
-    ((void(*)(void))ifun)();
 }
 
 void helper_rdtsc(CPUX86State *env)

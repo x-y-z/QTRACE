@@ -180,6 +180,7 @@ DEF(debug_insn_start, 0, 0, 1, TCG_OPF_NOT_PRESENT)
 #endif
 DEF(exit_tb, 0, 0, 1, TCG_OPF_BB_END)
 DEF(goto_tb, 0, 0, 1, TCG_OPF_BB_END)
+DEF(qtrace_icall, 0, 0, 0, 0)
 
 #define IMPL_NEW_LDST \
     (TCG_OPF_CALL_CLOBBER | TCG_OPF_SIDE_EFFECTS \
