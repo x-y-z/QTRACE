@@ -2677,6 +2677,18 @@ void tcg_qtrace_instrument_call(TCGContext *s)
                                   TCG_AREG0, 
                                   offsetof(CPUArchState, qtrace_msize));
              break;
+        case QTRACE_MEMTRACE_VALUE:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_value));
+             break;
+        case QTRACE_PCTRACE_VMA:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_progctr));
+	     break;
         default:
              break;
         }

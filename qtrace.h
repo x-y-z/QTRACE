@@ -133,10 +133,10 @@ typedef struct InstrumentContext  {
     unsigned  ciarg;    /* current iarg */
     unsigned  iargs[QTRACE_MAX_IARGS]; /* instrumentation args */
     unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
+    unsigned  pcfext;   /* this is the flag representing the instrmentation for program counter */
     unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
 } InstrumentContext;
    
-
 /* qtrace memory tracing related stuff */
 #define QTRACE_MEMTRACE_BITS  		(4)
 #define QTRACE_MEMTRACE_NONE  		(0)
@@ -146,6 +146,10 @@ typedef struct InstrumentContext  {
 #define QTRACE_MEMTRACE_MSIZE 		(1<<2)     
 #define QTRACE_MEMTRACE_VALUE 		(1<<3)   
 
+#define QTRACE_ADD_MEMTRACE(index,x)    (((index) | (x << QTRACE_MEMTRACE_BITS))) 
+#define QTRACE_EXT_MEMTRACE(index)      ((index >> QTRACE_MEMTRACE_BITS)) 
+#define QTRACE_EXT_MEMINDEX(index)      ((index & ((1<<QTRACE_MEMTRACE_BITS)-1))) 
+
 #define RESET_QTRACE_MEMTRACE_ADDRS(x)	(x &= (~QTRACE_MEMTRACE_VPMA)) 
 #define RESET_QTRACE_MEMTRACE_MSIZE(x)  (x &= (~QTRACE_MEMTRACE_MSIZE))
 #define RESET_QTRACE_MEMTRACE_VALUE(x)  (x &= (~QTRACE_MEMTRACE_VALUE))
@@ -154,9 +158,8 @@ typedef struct InstrumentContext  {
 #define QTRACE_MEMTRACE_EXT_MSIZE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_MSIZE); RESET_QTRACE_MEMTRACE_MSIZE(x); i;})
 #define QTRACE_MEMTRACE_EXT_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VALUE); RESET_QTRACE_MEMTRACE_VALUE(x); i;})
 
-#define QTRACE_ADD_MEMTRACE(index,x)    (((index) | (x << QTRACE_MEMTRACE_BITS))) 
-#define QTRACE_EXT_MEMTRACE(index)      ((index >> QTRACE_MEMTRACE_BITS)) 
-#define QTRACE_EXT_MEMINDEX(index)      ((index & ((1<<QTRACE_MEMTRACE_BITS)-1))) 
+/* qtrace program counter */
+#define QTRACE_PCTRACE_VMA		(1<<4)
 
 
 /* QTRACE branch related */

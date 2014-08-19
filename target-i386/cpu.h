@@ -925,7 +925,8 @@ typedef struct CPUX86State {
     target_ulong qtrace_msize;   /* memory size */
     target_ulong qtrace_vma;     /* virtual memory address */
     target_ulong qtrace_pma;     /* physcal memory address */
-    target_ulong qtrace_value;    /* memory before value */
+    target_ulong qtrace_value;   /* memory before value */
+    target_ulong qtrace_progctr; /* memory before value */
     target_ulong qtrace_btarget; /* branch target */
 } CPUX86State;
 

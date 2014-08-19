@@ -96,6 +96,11 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
    tcg_gen_op0(INDEX_op_qtrace_icall);                                 \
 } while(0);
 
+#define QTRACE_GENERATE_PC_INSTRUMENT(pc)                 do{   \
+   qtrace_gen_push_pcfext_imm(pc);				\
+} while(0);
+   
+
 #include "exec/gen-icount.h"
 
 #ifdef TARGET_X86_64
@@ -114,6 +119,7 @@ typedef struct DisasContext {
     int prefix;
     int aflag, dflag;
     target_ulong pc; /* pc = eip + cs_base */
+    target_ulong pc_start; /* pc = eip + cs_base */
     int is_jmp; /* 1 = means jump (stop translation), 2 means CPU
                    static state change (stop translation) */
     /* current block context */
@@ -525,6 +531,16 @@ static inline void gen_op_jmp_T0(void)
 static inline void qtrace_gen_push_btarget_T0(void)
 {
     if (icontext.btarget) tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, qtrace_btarget));
+}
+
+static inline void qtrace_gen_push_pcfext_imm(target_ulong pc)
+{
+    if (icontext.pcfext) 
+    {
+       tcg_gen_movi_tl(cpu_tmp0, pc);
+       tcg_gen_st_tl(cpu_tmp0, cpu_env, offsetof(CPUX86State, qtrace_progctr));
+    }
+    return;
 }
 
 static inline void gen_op_add_reg_im(int size, int reg, int32_t val)
@@ -4726,6 +4742,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP | CPU_LOG_TB_OP_OPT))) {
         tcg_gen_debug_insn_start(pc_start);
     }
+    s->pc_start = pc_start;
     s->pc = pc_start;
     prefixes = 0;
     s->override = -1;
@@ -5307,7 +5324,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
             /* QTRACE. get branch target */
             qtrace_gen_push_btarget_T0(); 
-            ///gen_helper_qtrace_entry(cpu_env, tcg_const_i64(icontext.ifun));
 
             gen_op_jmp_T0();
             gen_eob(s);
@@ -5773,6 +5789,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* this is a load from memory */
         QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
         QTRACE_CLIENT_MODULE(s);
+
+        QTRACE_GENERATE_PC_INSTRUMENT(s->pc_start);
+
+        if (icontext.pcfext & QTRACE_PCTRACE_VMA) 
 
         /* generate the pre-inst instrumentation */
         QTRACE_MATERIALIZE_PREINST_INSTRUMENT();

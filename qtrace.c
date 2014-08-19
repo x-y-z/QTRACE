@@ -126,6 +126,10 @@ void qtrace_instrument_parser(unsigned pos, ...)
                         icontext.iargs[icontext.ciarg++] = arg;
 			icontext.memfext |= arg;
 			break;
+		case QTRACE_PCTRACE_VMA:
+                        icontext.iargs[icontext.ciarg++] = arg;
+			icontext.pcfext |= arg;
+			break;
 		/* branch instrumentation */
      		case QTRACE_BRANCH_TARGET:
                         icontext.iargs[icontext.ciarg++] = arg;
