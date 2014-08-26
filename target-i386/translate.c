@@ -88,18 +88,35 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
 /* generate the pre-insruction instrumentation */
 #define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          do {  \
-   tcg_gen_op0(INDEX_op_qtrace_icall);                                 \
+   if (icontext.ifun) tcg_gen_op0(INDEX_op_qtrace_icall);       \
 } while(0);
 
 /* generate the post-insruction instrumentation */
 #define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         do {  \
-   tcg_gen_op0(INDEX_op_qtrace_icall);                                 \
+   if (icontext.ifun) tcg_gen_op0(INDEX_op_qtrace_icall);       \
 } while(0);
 
 #define QTRACE_GENERATE_PC_INSTRUMENT(pc)                 do{   \
    qtrace_gen_push_pcfext_imm(pc);				\
 } while(0);
-   
+
+
+/// ------------------------------------------------------------- ///
+///                                                               ///
+///             QTRACE BRANCH INSTRUMENT UTILS                    ///
+///                                                               ///
+/// ------------------------------------------------------------- ///
+#define QTRACE_BRANCH_INSTRUMENT() (icontext.btarget)
+
+#define QTRACE_BRANCH_PUSH_BTARGET_TCGV(X)                	do { 	\
+    tcg_gen_st_tl(X, cpu_env, offsetof(CPUX86State, qtrace_btarget)); 	\
+} while(0);
+
+#define QTRACE_BRANCH_PUSH_BTARGET_IM(X)               		do { 	\
+    tcg_gen_movi_tl(cpu_tmp0, X);                        		\
+    QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);           		\
+} while(0);
+
 
 #include "exec/gen-icount.h"
 
@@ -526,11 +543,6 @@ static inline void gen_op_addl_T0_T1(void)
 static inline void gen_op_jmp_T0(void)
 {
     tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, eip));
-}
-
-static inline void qtrace_gen_push_btarget_T0(void)
-{
-    if (icontext.btarget) tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, qtrace_btarget));
 }
 
 static inline void qtrace_gen_push_pcfext_imm(target_ulong pc)
@@ -2470,22 +2482,24 @@ static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
 
     pc = s->cs_base + eip;
     tb = s->tb;
-#if 1 
+
+    /* generate the pre-inst instrumentation */
+    QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+    /* jump to same page: we can use a direct jump */
+    gen_jmp_im(eip);
+    /* generate the pre-inst instrumentation */
+    QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+
     /* NOTE: we handle the case where the TB spans two pages here */
     if ((pc & TARGET_PAGE_MASK) == (tb->pc & TARGET_PAGE_MASK) ||
         (pc & TARGET_PAGE_MASK) == ((s->pc - 1) & TARGET_PAGE_MASK))  {
-        /* jump to same page: we can use a direct jump */
         tcg_gen_goto_tb(tb_num);
-        gen_jmp_im(eip);
+        //gen_jmp_im(eip);
         tcg_gen_exit_tb((uintptr_t)tb + tb_num);
     } else {
-#endif
         /* jump to another page: currently not optimized */
-        gen_jmp_im(eip);
         gen_eob(s);
-#if 1
     }
-#endif
 }
 
 static inline void gen_jcc(DisasContext *s, int b,
@@ -5323,7 +5337,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_op_andl_T0_ffff();
 
             /* QTRACE. get branch target */
-            qtrace_gen_push_btarget_T0(); 
+            if (QTRACE_BRANCH_INSTRUMENT()) QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
 
             gen_op_jmp_T0();
             gen_eob(s);
@@ -5791,8 +5805,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         QTRACE_CLIENT_MODULE(s);
 
         QTRACE_GENERATE_PC_INSTRUMENT(s->pc_start);
-
-        if (icontext.pcfext & QTRACE_PCTRACE_VMA) 
 
         /* generate the pre-inst instrumentation */
         QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
@@ -7041,6 +7053,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         goto do_lcall;
     case 0xe9: /* jmp im */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_CLIENT_MODULE(s);
+
         if (dflag)
             tval = (int32_t)insn_get(env, s, OT_LONG);
         else
@@ -7050,6 +7065,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             tval &= 0xffff;
         else if(!CODE64(s))
             tval &= 0xffffffff;
+
+        if (QTRACE_BRANCH_INSTRUMENT()) QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jmp(s, tval);
         break;
     case 0xea: /* ljmp im */

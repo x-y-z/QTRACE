@@ -2689,6 +2689,12 @@ void tcg_qtrace_instrument_call(TCGContext *s)
                                   TCG_AREG0, 
                                   offsetof(CPUArchState, qtrace_progctr));
 	     break;
+        case QTRACE_BRANCH_TARGET:
+             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, qtrace_btarget));
+	     break;
         default:
              break;
         }
@@ -2696,12 +2702,8 @@ void tcg_qtrace_instrument_call(TCGContext *s)
 
     /* lastly, make the call */
     uintptr_t ifun = icontext.ifun;
+    assert(ifun);
     tcg_out_calli(s, (uintptr_t)ifun);
-#if 0
-    /* The second argument is already loaded with addrlo.  */
-    tcg_out_movi(s, TCG_TYPE_I32, tcg_target_call_iarg_regs[2],
-                 l->mem_index);
-    tcg_out_movi(s, TCG_TYPE_PTR, tcg_target_call_iarg_regs[3],
-                (uintptr_t)l->raddr);
-#endif
+  
+    return;
 }

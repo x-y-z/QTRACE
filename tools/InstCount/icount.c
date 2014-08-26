@@ -10,14 +10,19 @@ static int usercount = 0;
 static int kerncount = 0;
 static int totlcount = 0;
 
-void __attribute__((cdecl)) CacheSim(void* vma, void *pma, unsigned msize, unsigned value, void *pc)
+void CacheSim(void* vma, void *pma, unsigned msize, unsigned value, void *pc)
 {
    printf("vma is 0x%lx pma is 0x%lx msize is %d value is %d pc is 0x%lx\n", vma, pma, msize, value, pc);
 }
 
+void JmpSim(void* target)
+{
+   printf("target is 0x%lx\n", target);
+}
+
 void InstructionCallBack(unsigned type)
 {
-#if 1 
+#if 0 
     if (QTRACE_TEST_FETCH(type))
     {
        Module_INS_InsertCall(8, 
@@ -30,11 +35,11 @@ void InstructionCallBack(unsigned type)
                              QTRACE_PCTRACE_VMA);
     }
 #else
-    if (QTRACE_TEST_BRANCH(type) && QTRACE_TEST_INDIRECT(type))
+    if (QTRACE_TEST_JMP(type))
     {
        Module_INS_InsertCall(4, 
-                             QTRACE_IPOINT_BEFORE, 
-                             QTRACE_IFUN, CacheSim, 
+                             QTRACE_IPOINT_AFTER, 
+                             QTRACE_IFUN, JmpSim, 
                              QTRACE_BRANCH_TARGET);
  
     }
