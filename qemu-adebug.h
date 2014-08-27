@@ -24,8 +24,9 @@
 
 #define SHARED_MEM_KEY 154519
 typedef struct {
-  int reset;
-  int flushcc;
+  int _client_reset_;
+  int _client_print_;
+  int _flushcc_;
 } DebugChannel;
 
 #endif /* QEMU_ADEBUG_H */

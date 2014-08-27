@@ -52,12 +52,15 @@ void cpu_resume_from_signal(CPUArchState *env, void *puc)
 
 
 /* asynchronous debug channel */
-extern DebugChannel *adebug;
+extern DebugChannel *channel;
 static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu) 
 {
-   /* flush code cache */
-   if (adebug->flushcc) tb_flush(cpu);
-   adebug->flushcc = 0;
+	if (channel->_flushcc_) 
+   	{
+   		/* flush code cache */
+		tb_flush(cpu);
+   		channel->_flushcc_ = 0;
+   	}
 }
 
 /* Execute a TB, and fix up the CPU state afterwards if necessary */

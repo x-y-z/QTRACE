@@ -240,7 +240,7 @@ size_t boot_splash_filedata_size;
 uint8_t qemu_extra_params_fw[2];
 
 /* asynchrounous debug channel for QTRACE */
-DebugChannel *adebug;
+DebugChannel *channel;
 
 typedef struct FWBootEntry FWBootEntry;
 
@@ -1469,12 +1469,12 @@ static void initialize_adebug(void)
                           S_IRUSR   |     // Owner read permission.
                           S_IWUSR);       // Owner write permission.
 
-   adebug = (DebugChannel*)shmat(shared_id, NULL, 0);
-   assert(adebug);
-   printf("create channel with key %d\n", SHARED_MEM_KEY);
+   channel = (DebugChannel*)shmat(shared_id, NULL, 0);
+   assert(channel);
+   printf("create channel 0x%lx with key %d\n", channel, SHARED_MEM_KEY);
 }
 
-static void adebug_free(void ) {  shmdt(adebug);  }
+static void adebug_free(void ) {  shmdt(channel);  }
 
 /***********************************************************/
 /* USB devices */
