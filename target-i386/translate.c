@@ -79,42 +79,47 @@ static TCGv qtrace_pma;
 
 static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
-/* instruction parsed. call the instrumentation routine */
-#define QTRACE_CLIENT_MODULE(s)                           do {  \
-   /* call instruction instrumentation routine */            \
-   qtrace_invoke_instruction_callback(s->qtrace_insnflags);  \
-   s->qtrace_insncb = true;                            \
+
+/// ------------------------------------------------------------- ///
+///             QTRACE GENERAL INSTRUMENT UTILS                   ///
+/// ------------------------------------------------------------- ///
+#define QTRACE_CLIENT_MODULE(s)                           	do {  	\
+   /* call instruction instrumentation routine */            		\
+   qtrace_invoke_instruction_callback(s->qtrace_insnflags);  		\
+   s->qtrace_insncb = true;                            			\
 } while(0);
 
-/* generate the pre-insruction instrumentation */
-#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          do {  \
-   if (icontext.ifun) tcg_gen_op0(INDEX_op_qtrace_icall);       \
+#define QTRACE_ICALL() (icontext.ifun)
+#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          	do {  	\
+    if (QTRACE_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
 } while(0);
 
 /* generate the post-insruction instrumentation */
-#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         do {  \
-   if (icontext.ifun) tcg_gen_op0(INDEX_op_qtrace_icall);       \
+#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         	do {  	\
+    if (QTRACE_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
 } while(0);
 
-#define QTRACE_GENERATE_PC_INSTRUMENT(pc)                 do{   \
-   qtrace_gen_push_pcfext_imm(pc);				\
+/// ------------------------------------------------------------- ///
+///             QTRACE PC INSTRUMENT UTILS                        ///
+/// ------------------------------------------------------------- ///
+#define QTRACE_GENERATE_PC_INSTRUMENT(pc)                 	do{   	\
+   qtrace_gen_push_pcfext_imm(pc);					\
 } while(0);
 
 
 /// ------------------------------------------------------------- ///
-///                                                               ///
 ///             QTRACE BRANCH INSTRUMENT UTILS                    ///
-///                                                               ///
 /// ------------------------------------------------------------- ///
-#define QTRACE_BRANCH_INSTRUMENT() (icontext.btarget)
-
+#define QTRACE_BTARGET() (icontext.btarget)
 #define QTRACE_BRANCH_PUSH_BTARGET_TCGV(X)                	do { 	\
     tcg_gen_st_tl(X, cpu_env, offsetof(CPUX86State, qtrace_btarget)); 	\
 } while(0);
 
 #define QTRACE_BRANCH_PUSH_BTARGET_IM(X)               		do { 	\
-    tcg_gen_movi_tl(cpu_tmp0, X);                        		\
-    QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);           		\
+    if (QTRACE_BTARGET()) {						\
+        tcg_gen_movi_tl(cpu_tmp0, X);                        		\
+        QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);           		\
+    }									\
 } while(0);
 
 
@@ -2510,10 +2515,10 @@ static inline void gen_jcc(DisasContext *s, int b,
     if (s->jmp_opt) {
         l1 = gen_new_label();
         gen_jcc1(s, b, l1);
-
+        /* instrumentation materialized in gen_goto_tb */
         gen_goto_tb(s, 0, next_eip);
-
         gen_set_label(l1);
+        /* instrumentation materialized in gen_goto_tb */
         gen_goto_tb(s, 1, val);
         s->is_jmp = DISAS_TB_JUMP;
     } else {
@@ -2521,11 +2526,26 @@ static inline void gen_jcc(DisasContext *s, int b,
         l2 = gen_new_label();
         gen_jcc1(s, b, l1);
 
+        /* generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
         gen_jmp_im(next_eip);
+
+        /* generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+
         tcg_gen_br(l2);
 
         gen_set_label(l1);
+
+        /* generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
         gen_jmp_im(val);
+
+        /* generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+
         gen_set_label(l2);
         gen_eob(s);
     }
@@ -5304,8 +5324,19 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_op_andl_T0_ffff();
             next_eip = s->pc - s->cs_base;
             gen_movtl_T1_im(next_eip);
+
+	    /* QTRACE. get branch target */
+            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[1]);
+
+            /* generate the pre-inst instrumentation */
+            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
             gen_push_T1(s);
             gen_op_jmp_T0();
+
+            /* generate the post-inst instrumentation */
+            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+
             gen_eob(s);
             break;
         case 3: /* lcall Ev */
@@ -5337,9 +5368,16 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_op_andl_T0_ffff();
 
             /* QTRACE. get branch target */
-            if (QTRACE_BRANCH_INSTRUMENT()) QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
+            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
+
+            /* generate the pre-inst instrumentation */
+            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
 
             gen_op_jmp_T0();
+
+            /* generate the post-inst instrumentation */
+            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+
             gen_eob(s);
             break;
         case 5: /* ljmp Ev */
@@ -7066,7 +7104,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         else if(!CODE64(s))
             tval &= 0xffffffff;
 
-        if (QTRACE_BRANCH_INSTRUMENT()) QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
+        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jmp(s, tval);
         break;
     case 0xea: /* ljmp im */
@@ -7084,16 +7122,26 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         goto do_ljmp;
     case 0xeb: /* jmp Jb */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_CLIENT_MODULE(s);
+
         tval = (int8_t)insn_get(env, s, OT_BYTE);
         tval += s->pc - s->cs_base;
         if (s->dflag == 0)
             tval &= 0xffff;
+
+        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jmp(s, tval);
         break;
     case 0x70 ... 0x7f: /* jcc Jb */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
+        QTRACE_CLIENT_MODULE(s);
+
         tval = (int8_t)insn_get(env, s, OT_BYTE);
         goto do_jcc;
     case 0x180 ... 0x18f: /* jcc Jv */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
+        QTRACE_CLIENT_MODULE(s);
         if (dflag) {
             tval = (int32_t)insn_get(env, s, OT_LONG);
         } else {
@@ -7104,6 +7152,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         tval += next_eip;
         if (s->dflag == 0)
             tval &= 0xffff;
+
+        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jcc(s, b, tval, next_eip);
         break;
 

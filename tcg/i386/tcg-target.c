@@ -2654,8 +2654,9 @@ void tcg_qtrace_instrument_call(TCGContext *s)
 {
     unsigned idx = 0, ciarg = icontext.ciarg;
 
+
     /* setup arguments for call one-by-one */
-    for(idx = 0; idx < ciarg; ++idx)
+    for(idx = 0; idx<ciarg; ++idx)
     {
         switch(icontext.iargs[idx])
         {
@@ -2695,6 +2696,13 @@ void tcg_qtrace_instrument_call(TCGContext *s)
                                   TCG_AREG0, 
                                   offsetof(CPUArchState, qtrace_btarget));
 	     break;
+	case QTRACE_PROCESS_UPID:
+	     /* use CR[3] as the unique process ID */
+      	     tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
+                                  tcg_target_call_iarg_regs[idx], 
+                                  TCG_AREG0, 
+                                  offsetof(CPUArchState, cr[3]));
+	     break;
         default:
              break;
         }
@@ -2704,6 +2712,9 @@ void tcg_qtrace_instrument_call(TCGContext *s)
     uintptr_t ifun = icontext.ifun;
     assert(ifun);
     tcg_out_calli(s, (uintptr_t)ifun);
+
+    /* FIXME-XIN-TONG : what if there are more than 6 arguments */
+    assert(ciarg<6);
   
     return;
 }

@@ -132,9 +132,12 @@ void qtrace_instrument_parser(unsigned pos, ...)
 			break;
 		/* branch instrumentation */
      		case QTRACE_BRANCH_TARGET:
-			printf("QTRACE_BRANCH_TARGET called\n");
                         icontext.iargs[icontext.ciarg++] = arg;
         		icontext.btarget = true;
+			break;
+		/* process unique id instrumentation */
+		case QTRACE_PROCESS_UPID:
+                        icontext.iargs[icontext.ciarg++] = arg;
 			break;
      		default:
         		break;

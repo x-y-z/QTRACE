@@ -161,16 +161,16 @@ typedef struct InstrumentContext  {
 /* qtrace program counter */
 #define QTRACE_PCTRACE_VMA		(1<<4)
 
-
 /* QTRACE branch related */
-#define QTRACE_BRANCH_TARGET  (1<<5)   
+#define QTRACE_BRANCH_TARGET  		(1<<5)   
+#define QTRACE_BRANCH_TAKEN  		(1<<6)   
+#define QTRACE_BRANCH_NOTTAKEN  	(1<<7)   
+#define QTRACE_PROCESS_UPID		(1<<8)
 
 /* QTRACE instrumentation function */
-#define QTRACE_IFUN  	      (1<<6)
-#define QTRACE_IPOINT_BEFORE  (1<<7)
-#define QTRACE_IPOINT_AFTER   (1<<8)
-
-
+#define QTRACE_IFUN  	      		(1<<15)
+#define QTRACE_IPOINT_BEFORE  		(1<<16)
+#define QTRACE_IPOINT_AFTER   		(1<<17)
 
 
 #endif /* QTRACE_H */

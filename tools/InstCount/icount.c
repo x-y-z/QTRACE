@@ -15,9 +15,10 @@ void CacheSim(void* vma, void *pma, unsigned msize, unsigned value, void *pc)
    printf("vma is 0x%lx pma is 0x%lx msize is %d value is %d pc is 0x%lx\n", vma, pma, msize, value, pc);
 }
 
-void JmpSim(void* target)
+void JmpSim(void* target, unsigned long upid)
 {
-   printf("target is 0x%lx\n", target);
+	if (!upid) return;
+   printf("target is 0x%lx upid is %ld\n", target, upid);
 }
 
 void InstructionCallBack(unsigned type)
@@ -35,12 +36,14 @@ void InstructionCallBack(unsigned type)
                              QTRACE_PCTRACE_VMA);
     }
 #else
-    if (QTRACE_TEST_JMP(type))
+    //if (QTRACE_TEST_JMP(type))
+    if (QTRACE_TEST_BRANCH(type) && QTRACE_TEST_INDIRECT(type))
     {
-       Module_INS_InsertCall(4, 
+       Module_INS_InsertCall(5, 
                              QTRACE_IPOINT_AFTER, 
                              QTRACE_IFUN, JmpSim, 
-                             QTRACE_BRANCH_TARGET);
+                             QTRACE_BRANCH_TARGET, 
+			     QTRACE_PROCESS_UPID);
  
     }
 #endif 
