@@ -24,6 +24,10 @@
 #include "sysemu/qtest.h"
 #include "qemu-adebug.h"
 
+extern void * client_reset_stats;
+extern void  * client_print_stats;
+
+
 bool qemu_cpu_has_work(CPUState *cpu)
 {
     return cpu_has_work(cpu);
@@ -61,6 +65,14 @@ static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu)
 		tb_flush(cpu);
    		channel->_flushcc_ = 0;
    	}
+	if (channel->_client_reset_) 
+   	{
+		printf("reset call 0x%lx\n", client_reset_stats);
+   		/* flush code cache */
+		((void(*)())client_reset_stats)();
+   		channel->_client_reset_ = 0;
+   	}
+
 }
 
 /* Execute a TB, and fix up the CPU state afterwards if necessary */

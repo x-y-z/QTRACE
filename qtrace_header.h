@@ -23,8 +23,29 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define QTRACE_MAX_CALLBACK_NUM 32
+unsigned InstructionCallBackNum = 0, BasicBlockCallBackNum = 0;
+void* InstructionCallBackArray[QTRACE_MAX_CALLBACK_NUM] = {0};
+void* BasicBlockCallBackArray[QTRACE_MAX_CALLBACK_NUM]  = {0};
+void* ResetStats = NULL, *PrintStats = NULL;
+
+void AddInstructionCallBack(void *callback)
+{
+  	InstructionCallBackArray[InstructionCallBackNum++] = callback;
+}
+
+void AddBasicBlockCallBack(void *callback)
+{
+  	BasicBlockCallBackArray[BasicBlockCallBackNum++] = callback;
+}
+
+void AddStatsReset(void *reset) { ResetStats = reset; }
+void AddStatsPrint(void *print) { PrintStats = print; }
+
 static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_INS_InsertCall = NULL;
 static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_IBB_InsertCall = NULL;
+static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_STS_Reset = NULL;
+static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_STS_Print = NULL;
 
 void INS_InsertCall(QTRACE_INSERT_INSTRUMENT_CALLBACK ins_insertcall_func)
 {

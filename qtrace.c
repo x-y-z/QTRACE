@@ -30,6 +30,9 @@ InstrumentContext icontext;
 InstructionRtn* instruction_list = NULL;
 IBasicBlockRtn* basicblock_list = NULL;
 
+void * client_reset_stats;
+void * client_print_stats;
+
 static const char* icb = "InstructionCallBack"; 
 static const char* bcb = "BasicBlockCallBack"; 
 static const char* ims = "INS_InsertCall";
@@ -41,6 +44,9 @@ static inline void handle_unable_load_module(const char *optarg)
    	QTRACE_ERROR("unable to load instrumentation module %s\n", optarg);
    	QTRACE_EXIT(-1);
 }
+
+static void register_stats_reset(RESET_STATS rs)  { client_reset_stats = rs; }
+static void register_stats_print(PRINT_STATS ps)  { client_print_stats = ps; }
 
 static void register_instruction_cb(INSTRUCTION_CALLBACK cb)
 {
@@ -161,9 +167,24 @@ void qtrace_instrument_setup(const char *module)
    	/* load the instrumentation module */
    	if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
-   	/* register the instrumentation module functions with runtime */
-   	register_instruction_cb((INSTRUCTION_CALLBACK)dlsym(handle, icb));
-   	register_ibasicblock_cb((IBASICBLOCK_CALLBACK)dlsym(handle, bcb));
+	unsigned idx = 0;
+
+	void **InstructionCallBackArray = (void **)dlsym(handle, "InstructionCallBackArray"); 
+        unsigned InstructionCallBackNum = *(unsigned*) dlsym(handle, "InstructionCallBackNum");
+	for(idx=0; idx<InstructionCallBackNum; ++idx) 
+	{
+		register_instruction_cb(((INSTRUCTION_CALLBACK)InstructionCallBackArray[idx]));
+	}
+
+	void **BasicBlockCallBackArray = (void **)dlsym(handle, "BasicBlockCallBackArray"); 
+        unsigned BasicBlockCallBackNum = *(unsigned*) dlsym(handle, "BasicBlockCallBackNum");
+	for(idx=0; idx<BasicBlockCallBackNum; ++idx) 
+	{
+   		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)BasicBlockCallBackArray[idx]);
+	}
+
+	register_stats_reset(*(void**) dlsym(handle, "ResetStats"));
+	register_stats_print(*(void**) dlsym(handle, "PrintStats"));
 
    	/* register runtime functions with the instrumentation module */
    	QTRACE_MODULE_FUNC_INIT module_function_init;

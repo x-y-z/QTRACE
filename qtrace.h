@@ -51,6 +51,7 @@
 #define QTRACE_IS_RDTSC           (1<<23)
 #define QTRACE_IS_ARITHLOGIC      (1<<24)
 #define QTRACE_IS_INDIRECT        (1<<25)
+#define QTRACE_IS_RETURN          (1<<26)
 
 #define QTRACE_TEST_FETCH(X)      ((X&QTRACE_IS_FETCH)>0)
 #define QTRACE_TEST_STORE(X)      ((X&QTRACE_IS_STORE)>0)
@@ -78,6 +79,7 @@
 #define QTRACE_TEST_RDTSC(X)      ((X&QTRACE_IS_RDTSC)>0) 
 #define QTRACE_TEST_ARITHLOGIC(X) ((X&QTRACE_IS_ARITHLOGIC)>0) 
 #define QTRACE_TEST_INDIRECT(X)   ((X&QTRACE_IS_INDIRECT)>0) 
+#define QTRACE_TEST_RETURN(X)	  ((X&QTRACE_IS_RETURN)>0) 
 
 
 /// ------------------------------------------------ ///
@@ -88,6 +90,12 @@ void (*INSTRUCTION_CALLBACK)(unsigned);
 
 typedef 
 void (*IBASICBLOCK_CALLBACK)(unsigned);
+
+typedef 
+void (*RESET_STATS)(unsigned);
+
+typedef 
+void (*PRINT_STATS)(unsigned);
 
 typedef 
 void 
@@ -106,9 +114,12 @@ typedef struct instructionRtn InstructionRtn;
 struct iBasicBlockRtn { IBASICBLOCK_CALLBACK rtn; struct iBasicBlockRtn *next; };
 typedef struct iBasicBlockRtn IBasicBlockRtn;
 
+
 /* list to keep all the instruction and basicblock level instrumentation */
 extern InstructionRtn* icb_head;
 extern IBasicBlockRtn* ibb_head;
+extern void * client_reset_stats;
+extern void  * client_print_stats;
 
 /// ------------------------------------------------ ///
 /// instrumentation function list
@@ -171,6 +182,11 @@ typedef struct InstrumentContext  {
 #define QTRACE_IFUN  	      		(1<<15)
 #define QTRACE_IPOINT_BEFORE  		(1<<16)
 #define QTRACE_IPOINT_AFTER   		(1<<17)
+
+
+#define QTRACE_ADD_FLAG(s,flag) s->qtrace_insnflags|=(flag);
+#define QTRACE_ADD_COND_FLAG(s,flag,c) {if(c) s->qtrace_insnflags|=(flag);}
+#define QTRACE_RESET_FLAG(s)    s->qtrace_insnflags=0;
 
 
 #endif /* QTRACE_H */

@@ -51,6 +51,7 @@ static inline void handle_connection_##cmd(DebugChannel *channel)   	\
 { 									\
    	channel->_##cmd##_ = 1;   					\
    	QTRACE_WAIT_COMMAND_HANDLED(channel->_##cmd##_);		\
+	printf("Command Successful\n");					\
 } 
 
 QTRACE_HANDLE_CONNECTION(flushcc);
