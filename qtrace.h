@@ -136,7 +136,8 @@ void qtrace_invoke_client_print_stats(void);
 
 /* instrumentations */
 typedef struct InstrumentContext  {
-    uintptr_t ifun;     /* instrumentation function */
+    uintptr_t preifun;     /* instrumentation function */
+    uintptr_t pstifun;     /* instrumentation function */
     unsigned  ciarg;    /* current iarg */
     unsigned  iargs[QTRACE_MAX_IARGS]; /* instrumentation args */
     unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
@@ -155,7 +156,9 @@ typedef struct InstrumentContext  {
 #define QTRACE_MEMTRACE_PMA   		(1<<1) 
 #define QTRACE_MEMTRACE_VPMA  		(QTRACE_MEMTRACE_VMA | QTRACE_MEMTRACE_PMA)
 #define QTRACE_MEMTRACE_MSIZE 		(1<<2)     
-#define QTRACE_MEMTRACE_VALUE 		(1<<3)   
+#define QTRACE_MEMTRACE_VALUE 		(1<<3)     
+#define QTRACE_MEMTRACE_PREOP_VALUE 	(1<<4)   
+#define QTRACE_MEMTRACE_PSTOP_VALUE 	(1<<5)   
 
 #define QTRACE_ADD_MEMTRACE(index,x)    (((index) | (x << QTRACE_MEMTRACE_BITS))) 
 #define QTRACE_EXT_MEMTRACE(index)      ((index >> QTRACE_MEMTRACE_BITS)) 
@@ -163,20 +166,22 @@ typedef struct InstrumentContext  {
 
 #define RESET_QTRACE_MEMTRACE_ADDRS(x)	(x &= (~QTRACE_MEMTRACE_VPMA)) 
 #define RESET_QTRACE_MEMTRACE_MSIZE(x)  (x &= (~QTRACE_MEMTRACE_MSIZE))
-#define RESET_QTRACE_MEMTRACE_VALUE(x)  (x &= (~QTRACE_MEMTRACE_VALUE))
+#define RESET_QTRACE_MEMTRACE_PREOP_VALUE(x)  (x &= (~QTRACE_MEMTRACE_PREOP_VALUE))
+#define RESET_QTRACE_MEMTRACE_PSTOP_VALUE(x)  (x &= (~QTRACE_MEMTRACE_PSTOP_VALUE))
 
 #define QTRACE_MEMTRACE_EXT_ADDRS(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VPMA);  RESET_QTRACE_MEMTRACE_ADDRS(x); i;})
 #define QTRACE_MEMTRACE_EXT_MSIZE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_MSIZE); RESET_QTRACE_MEMTRACE_MSIZE(x); i;})
-#define QTRACE_MEMTRACE_EXT_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VALUE); RESET_QTRACE_MEMTRACE_VALUE(x); i;})
+#define QTRACE_MEMTRACE_EXT_PREOP_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_PREOP_VALUE); RESET_QTRACE_MEMTRACE_PREOP_VALUE(x); i;})
+#define QTRACE_MEMTRACE_EXT_PSTOP_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_PSTOP_VALUE); RESET_QTRACE_MEMTRACE_PSTOP_VALUE(x); i;})
 
 /* qtrace program counter */
-#define QTRACE_PCTRACE_VMA		(1<<4)
+#define QTRACE_PCTRACE_VMA		(1<<6)
 
 /* QTRACE branch related */
-#define QTRACE_BRANCH_TARGET  		(1<<5)   
-#define QTRACE_BRANCH_TAKEN  		(1<<6)   
-#define QTRACE_BRANCH_NOTTAKEN  	(1<<7)   
-#define QTRACE_PROCESS_UPID		(1<<8)
+#define QTRACE_BRANCH_TARGET  		(1<<7)   
+#define QTRACE_BRANCH_TAKEN  		(1<<8)   
+#define QTRACE_BRANCH_NOTTAKEN  	(1<<9)   
+#define QTRACE_PROCESS_UPID		(1<<10)
 
 /* QTRACE instrumentation function */
 #define QTRACE_IFUN  	      		(1<<15)

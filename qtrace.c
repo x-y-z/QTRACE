@@ -38,10 +38,10 @@ static inline void handle_unable_load_module(const char *optarg)
    	QTRACE_EXIT(-1);
 }
 
-static void add_function_to_list(void *f, const char *name, GenericRtn **list)
+static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
 {
    	/* it is possible that this module does not define a instruction callback */
-   	if (!f) return;
+   	if (!cb) return;
 
    	GenericRtn *head = *list;
    	if (!*list) 
@@ -57,9 +57,9 @@ static void add_function_to_list(void *f, const char *name, GenericRtn **list)
    	}
 
    	/* register the callback */
-   	head->rtn   = f;
+   	head->rtn   = cb;
 	head->mname = malloc(strlen(name)+1); 
-	memcpy(head->mname, name, strlen(name)+1);
+	memcpy(head->mname, (char*)name, strlen(name)+1);
    	head->next  = NULL;
 
 	/* done */
@@ -99,15 +99,24 @@ void qtrace_instrument_parser(unsigned pos, ...)
         /* reset icontext */
         memset(&icontext, 0x0, sizeof(InstrumentContext));
 
+	unsigned insertpoint = 0;
+
 	unsigned idx=0;
   	for (idx=0;idx<pos;idx++) 
   	{
      		unsigned arg = va_arg(arguments, unsigned);
      		switch (arg)
      		{
+		case QTRACE_IPOINT_BEFORE:
+			insertpoint = 0;
+			break;
+		case QTRACE_IPOINT_AFTER:
+			insertpoint = 1;
+			break;
 		/* instrumentation function address */
      		case QTRACE_IFUN:
-        		icontext.ifun = va_arg(arguments, uintptr_t);
+        		if (insertpoint)  icontext.pstifun = va_arg(arguments, uintptr_t);
+        		if (!insertpoint) icontext.preifun = va_arg(arguments, uintptr_t);
         		++idx;
         		break;
 		/* memory address instrumentation */
@@ -115,7 +124,6 @@ void qtrace_instrument_parser(unsigned pos, ...)
 		case QTRACE_MEMTRACE_VMA:
 		case QTRACE_MEMTRACE_PMA:
 		case QTRACE_MEMTRACE_VPMA:
-		case QTRACE_MEMTRACE_VALUE:
                         icontext.iargs[icontext.ciarg++] = arg;
 			icontext.memfext |= arg;
 			break;
@@ -132,6 +140,13 @@ void qtrace_instrument_parser(unsigned pos, ...)
 		case QTRACE_PROCESS_UPID:
                         icontext.iargs[icontext.ciarg++] = arg;
 			break;
+		/* expand memory value to preop and pstop value */
+		case QTRACE_MEMTRACE_VALUE:
+			arg = !insertpoint ? QTRACE_MEMTRACE_PREOP_VALUE : 
+					     QTRACE_MEMTRACE_PSTOP_VALUE ;
+			icontext.iargs[icontext.ciarg++]  = arg; 
+			icontext.memfext |= arg;
+			break;
      		default:
         		break;
      		}
@@ -140,7 +155,6 @@ void qtrace_instrument_parser(unsigned pos, ...)
   	va_end (arguments);          
 
 	/* briefly verify the validity of the instrumentations */
-	assert(icontext.ifun); /* must have valid inst function */
 
 	/* done */
 	return;

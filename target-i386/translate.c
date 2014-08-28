@@ -89,14 +89,15 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
    s->qtrace_insncb = true;                            			\
 } while(0);
 
-#define QTRACE_ICALL() (icontext.ifun)
+#define QTRACE_PREOP_ICALL() (icontext.preifun)
 #define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          	do {  	\
-    if (QTRACE_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
+    if (QTRACE_PREOP_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
 } while(0);
 
 /* generate the post-insruction instrumentation */
+#define QTRACE_PSTOP_ICALL() (icontext.pstifun)
 #define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         	do {  	\
-    if (QTRACE_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
+    if (QTRACE_PSTOP_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
 } while(0);
 
 /// ------------------------------------------------------------- ///
@@ -2419,7 +2420,7 @@ static void gen_add_A0_ds_seg(DisasContext *s)
 
 /* generate modrm memory load or store of 'reg'. TMP0 is used if reg ==
    OR_TMP0 */
-static inline bool test_mem_ldst(int modrm) { return ((modrm >> 6) & 3) != 3; }
+static inline bool test_ldst_mem(int modrm) { return ((modrm >> 6) & 3) != 3; }
 static void gen_ldst_modrm(CPUX86State *env, DisasContext *s, int modrm,
                            int ot, int reg, int is_store)
 {
@@ -5842,7 +5843,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         mod = (modrm >> 6) & 3;
 
         /* QTRACE - this is a load from memory */
-        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_STORE, test_mem_ldst(modrm));
+        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         if (mod != 3) {
@@ -5878,7 +5879,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         reg = ((modrm >> 3) & 7) | rex_r;
 
         /* QTRACE - this is a load from memory */
-        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_FETCH, test_mem_ldst(modrm));
+        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_FETCH, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         /* QTRACE - program counter instrumentation */
@@ -5901,10 +5902,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         reg = (modrm >> 3) & 7;
         if (reg >= 6 || reg == R_CS)
             goto illegal_op;
-
-        /* this is a load from memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
 
         gen_ldst_modrm(env, s, modrm, OT_WORD, OR_TMP0, 0);
         gen_movl_seg_T0(s, reg, pc_start - s->cs_base);
@@ -5975,10 +5972,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 }
                 gen_op_mov_reg_T0(d_ot, reg);
             } else {
-                /* this is a load from memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-                QTRACE_CLIENT_MODULE(s);
-
                 gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
                 if (b & 8) {
                     gen_op_lds_T0_A0(ot + s->mem_index, s);
@@ -6045,8 +6038,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_add_A0_ds_seg(s);
             if ((b & 2) == 0) {
                 /* this is a load from memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-                QTRACE_CLIENT_MODULE(s);
+                //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_ld_T0_A0(ot + s->mem_index, s);
                 gen_op_mov_reg_T0(ot, R_EAX);
@@ -6083,8 +6076,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_add_A0_ds_seg(s);
 
         /* this is a store from memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
+        //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_op_ldu_T0_A0(OT_BYTE + s->mem_index, s);
         gen_op_mov_reg_T0(OT_BYTE, R_EAX);
@@ -6145,9 +6138,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_helper_lock();
 
             /* this is a load and store from memory */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-            QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-            QTRACE_CLIENT_MODULE(s);
+            //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+            //QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+            //QTRACE_CLIENT_MODULE(s);
 
             gen_op_ld_T1_A0(ot + s->mem_index, s);
             gen_op_st_T0_A0(ot + s->mem_index, s);
@@ -6181,8 +6174,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             goto illegal_op;
 
         /* this is a load from memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
+        //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
         gen_op_ld_T1_A0(ot + s->mem_index, s);
@@ -6308,8 +6301,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             case 0x30 ... 0x37: /* fixxx */
                 {
                     /* this is a load from memory */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-                    QTRACE_CLIENT_MODULE(s);
+                    //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                    //QTRACE_CLIENT_MODULE(s);
 
                     int op1;
                     op1 = op & 7;
@@ -6354,8 +6347,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 switch(op & 7) {
                 case 0:
                     /* this is a load from memory */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-                    QTRACE_CLIENT_MODULE(s);
+                    //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                    //QTRACE_CLIENT_MODULE(s);
                     switch(op >> 4) {
                     case 0:
                         gen_op_ld_T0_A0(OT_LONG + s->mem_index, s);
@@ -6444,8 +6437,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 break;
             case 0x0d: /* fldcw mem */
                 /* this is a load from memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-                QTRACE_CLIENT_MODULE(s);
+                //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_ld_T0_A0(OT_WORD + s->mem_index, s);
                 tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
@@ -8800,12 +8793,6 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         dc->qtrace_insncb = false;
         QTRACE_RESET_FLAG(dc);
         pc_ptr = disas_insn(env, dc, pc_ptr);
-
-        /* QTRACE. generate call to the instrumentation function */
-        if (icontext.ifun) 
-        {
-
-        }
 
         /* qtrace_insncb should have been set to true at this point*/
         num_insns++;

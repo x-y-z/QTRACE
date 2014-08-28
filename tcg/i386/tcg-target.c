@@ -111,6 +111,13 @@ static bool have_cmov;
 # define have_cmov 0
 #endif
 
+#define QTRACE_POP_INSTRUMENT(X,Y) 			do {	\
+      tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 		   	\
+                           tcg_target_call_iarg_regs[X],	\
+                           TCG_AREG0, 				\
+                           offsetof(CPUArchState, Y));		\
+} while(0);
+
 static uint8_t *tb_ret_addr;
 
 static void patch_reloc(uint8_t *code_ptr, int type,
@@ -1698,9 +1705,14 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     tcg_out_qemu_ld_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* Record the loaded value */
-    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_PREOP_VALUE(mem_trace)) 
     {
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_value));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_bval));
+    }
+
+    if (QTRACE_MEMTRACE_EXT_PSTOP_VALUE(mem_trace)) 
+    {
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_aval));
     }
 
     /* Record the current context of a load into ldst label */
@@ -1735,72 +1747,6 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
 static void tcg_out_qemu_st_direct(TCGContext *s, TCGReg datalo, TCGReg datahi,
                                    TCGReg base, intptr_t ofs, int seg,
                                    TCGMemOp memop)
-{
-    const TCGMemOp bswap = memop & MO_BSWAP;
-
-    /* ??? Ideally we wouldn't need a scratch register.  For user-only,
-       we could perform the bswap twice to restore the original value
-       instead of moving to the scratch.  But as it is, the L constraint
-       means that TCG_REG_L0 is definitely free here.  */
-    const TCGReg scratch = TCG_REG_L0;
-
-    switch (memop & MO_SIZE) {
-    case MO_8:
-        /* In 32-bit mode, 8-byte stores can only happen from [abcd]x.
-           Use the scratch register if necessary.  */
-        if (TCG_TARGET_REG_BITS == 32 && datalo >= 4) {
-            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
-            datalo = scratch;
-        }
-        tcg_out_modrm_offset(s, OPC_MOVB_EvGv + P_REXB_R + seg,
-                             datalo, base, ofs);
-        break;
-    case MO_16:
-        if (bswap) {
-            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
-            tcg_out_rolw_8(s, scratch);
-            datalo = scratch;
-        }
-        tcg_out_modrm_offset(s, OPC_MOVL_EvGv + P_DATA16 + seg,
-                             datalo, base, ofs);
-        break;
-    case MO_32:
-        if (bswap) {
-            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
-            tcg_out_bswap32(s, scratch);
-            datalo = scratch;
-        }
-        tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datalo, base, ofs);
-        break;
-    case MO_64:
-        if (TCG_TARGET_REG_BITS == 64) {
-            if (bswap) {
-                tcg_out_mov(s, TCG_TYPE_I64, scratch, datalo);
-                tcg_out_bswap64(s, scratch);
-                datalo = scratch;
-            }
-            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + P_REXW + seg,
-                                 datalo, base, ofs);
-        } else if (bswap) {
-            tcg_out_mov(s, TCG_TYPE_I32, scratch, datahi);
-            tcg_out_bswap32(s, scratch);
-            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, scratch, base, ofs);
-            tcg_out_mov(s, TCG_TYPE_I32, scratch, datalo);
-            tcg_out_bswap32(s, scratch);
-            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, scratch, base, ofs+4);
-        } else {
-            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datalo, base, ofs);
-            tcg_out_modrm_offset(s, OPC_MOVL_EvGv + seg, datahi, base, ofs+4);
-        }
-        break;
-    default:
-        tcg_abort();
-    }
-}
-
-static void tcg_out_qemu_st_direct_trace(TCGContext *s, TCGReg datalo, TCGReg datahi,
-                                         TCGReg base, intptr_t ofs, int seg,
-                                         TCGMemOp memop)
 {
     const TCGMemOp bswap = memop & MO_BSWAP;
 
@@ -1922,19 +1868,19 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     }
 
     /* record the value before store */
-    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_PREOP_VALUE(mem_trace)) 
     {
        tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_REG_L1, 0, 0, opc);
-       tcg_out_qemu_st_direct_trace(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_value), 0, opc);
+       tcg_out_qemu_st_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_bval), 0, opc);
     }
 
     /* TLB Hit.  */
     tcg_out_qemu_st_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* record the value after store */
-    if (QTRACE_MEMTRACE_EXT_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_EXT_PSTOP_VALUE(mem_trace)) 
     { 
-       tcg_out_qemu_st_direct_trace(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_value), 0, opc);
+       tcg_out_qemu_st_direct(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_aval), 0, opc);
     }
 
     /* Record the current context of a store into ldst label */
@@ -2650,10 +2596,37 @@ void tcg_register_jit(void *buf, size_t buf_size)
 }
 #endif
 
+static void tcg_qtrace_gen_prologue(TCGContext *s)
+{
+	tcg_out_push(s, TCG_REG_RAX); 
+	tcg_out_push(s, TCG_REG_RCX); 
+	tcg_out_push(s, TCG_REG_RDX); 
+	tcg_out_push(s, TCG_REG_RSI); 
+	tcg_out_push(s, TCG_REG_RDI); 
+	tcg_out_push(s, TCG_REG_R8); 
+	tcg_out_push(s, TCG_REG_R9); 
+	tcg_out_push(s, TCG_REG_R10); 
+	tcg_out_push(s, TCG_REG_R11); 
+}
+
+static void tcg_qtrace_gen_epilogue(TCGContext *s)
+{
+	tcg_out_pop(s, TCG_REG_R11); 
+	tcg_out_pop(s, TCG_REG_R10); 
+	tcg_out_pop(s, TCG_REG_R9); 
+	tcg_out_pop(s, TCG_REG_R8); 
+	tcg_out_pop(s, TCG_REG_RDI); 
+	tcg_out_pop(s, TCG_REG_RSI); 
+	tcg_out_pop(s, TCG_REG_RDX); 
+	tcg_out_pop(s, TCG_REG_RCX); 
+	tcg_out_pop(s, TCG_REG_RAX); 
+}
+
 void tcg_qtrace_instrument_call(TCGContext *s)
 {
     unsigned idx = 0, ciarg = icontext.ciarg;
 
+    tcg_qtrace_gen_prologue(s);
 
     /* setup arguments for call one-by-one */
     for(idx = 0; idx<ciarg; ++idx)
@@ -2661,47 +2634,29 @@ void tcg_qtrace_instrument_call(TCGContext *s)
         switch(icontext.iargs[idx])
         {
         case QTRACE_MEMTRACE_VMA:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_vma));
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_vma);
              break;
         case QTRACE_MEMTRACE_PMA:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_pma));
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_pma);
              break;
         case QTRACE_MEMTRACE_MSIZE:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_msize));
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_msize);
              break;
-        case QTRACE_MEMTRACE_VALUE:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_value));
+        case QTRACE_MEMTRACE_PREOP_VALUE:
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_bval);
+             break;
+        case QTRACE_MEMTRACE_PSTOP_VALUE:
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_aval);
              break;
         case QTRACE_PCTRACE_VMA:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_progctr));
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_progctr);
 	     break;
         case QTRACE_BRANCH_TARGET:
-             tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, qtrace_btarget));
+	     QTRACE_POP_INSTRUMENT(idx, qtrace_btarget);
 	     break;
 	case QTRACE_PROCESS_UPID:
 	     /* use CR[3] as the unique process ID */
-      	     tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 
-                                  tcg_target_call_iarg_regs[idx], 
-                                  TCG_AREG0, 
-                                  offsetof(CPUArchState, cr[3]));
+	     QTRACE_POP_INSTRUMENT(idx, cr[3]);
 	     break;
         default:
              break;
@@ -2709,9 +2664,11 @@ void tcg_qtrace_instrument_call(TCGContext *s)
     }
 
     /* lastly, make the call */
-    uintptr_t ifun = icontext.ifun;
+    uintptr_t ifun = icontext.preifun;
     assert(ifun);
     tcg_out_calli(s, (uintptr_t)ifun);
+
+    tcg_qtrace_gen_epilogue(s);
 
     /* FIXME-XIN-TONG : what if there are more than 6 arguments */
     assert(ciarg<6);
