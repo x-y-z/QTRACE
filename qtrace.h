@@ -92,34 +92,28 @@ typedef
 void (*IBASICBLOCK_CALLBACK)(unsigned);
 
 typedef 
-void (*RESET_STATS)(unsigned);
+void (*RESET_STATS)(void);
 
 typedef 
-void (*PRINT_STATS)(unsigned);
-
-typedef 
-void 
-(*QTRACE_INSERT_INSTRUMENT_CALLBACK)(unsigned, ...);
+void (*PRINT_STATS)(void);
 
 typedef 
 void 
-(*QTRACE_MODULE_FUNC_INIT)(QTRACE_INSERT_INSTRUMENT_CALLBACK);
+(*QTRACE_INSERT_INSTRUMENT)(unsigned, ...);
+
+typedef 
+void 
+(*QTRACE_MODULE_FINIT)(QTRACE_INSERT_INSTRUMENT);
 
 /// ------------------------------------------------ ///
 /// instrumentation module metadata 
 /// ------------------------------------------------ ///
-struct instructionRtn { INSTRUCTION_CALLBACK rtn; struct instructionRtn *next; };
-typedef struct instructionRtn InstructionRtn;
-
-struct iBasicBlockRtn { IBASICBLOCK_CALLBACK rtn; struct iBasicBlockRtn *next; };
-typedef struct iBasicBlockRtn IBasicBlockRtn;
-
-
-/* list to keep all the instruction and basicblock level instrumentation */
-extern InstructionRtn* icb_head;
-extern IBasicBlockRtn* ibb_head;
-extern void * client_reset_stats;
-extern void  * client_print_stats;
+struct genericRtn { void *rtn; const char* mname; struct genericRtn *next; };
+typedef struct genericRtn GenericRtn;
+typedef struct genericRtn InstructionRtn;
+typedef struct genericRtn IBasicBlockRtn;
+typedef struct genericRtn MResetStatsRtn;
+typedef struct genericRtn MPrintStatsRtn;
 
 /// ------------------------------------------------ ///
 /// instrumentation function list
@@ -127,6 +121,8 @@ extern void  * client_print_stats;
 void qtrace_instrument_parser(unsigned pos, ...); 
 void qtrace_instrument_setup(const char*);
 void qtrace_invoke_instruction_callback(unsigned arg);
+void qtrace_invoke_client_reset_stats(void);
+void qtrace_invoke_client_print_stats(void);
 
 
 /// ------------------------------------------------ ///
@@ -147,6 +143,10 @@ typedef struct InstrumentContext  {
     unsigned  pcfext;   /* this is the flag representing the instrmentation for program counter */
     unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
 } InstrumentContext;
+
+#define QTRACE_ADD_FLAG(s,flag) 	s->qtrace_insnflags|=(flag);
+#define QTRACE_ADD_COND_FLAG(s,flag,c) 	{if(c) s->qtrace_insnflags|=(flag);}
+#define QTRACE_RESET_FLAG(s)    	s->qtrace_insnflags=0;
    
 /* qtrace memory tracing related stuff */
 #define QTRACE_MEMTRACE_BITS  		(4)
@@ -184,9 +184,6 @@ typedef struct InstrumentContext  {
 #define QTRACE_IPOINT_AFTER   		(1<<17)
 
 
-#define QTRACE_ADD_FLAG(s,flag) s->qtrace_insnflags|=(flag);
-#define QTRACE_ADD_COND_FLAG(s,flag,c) {if(c) s->qtrace_insnflags|=(flag);}
-#define QTRACE_RESET_FLAG(s)    s->qtrace_insnflags=0;
 
 
 #endif /* QTRACE_H */

@@ -28,16 +28,9 @@
 InstrumentContext icontext; 
 
 InstructionRtn* instruction_list = NULL;
-IBasicBlockRtn* basicblock_list = NULL;
-
-void * client_reset_stats;
-void * client_print_stats;
-
-static const char* icb = "InstructionCallBack"; 
-static const char* bcb = "BasicBlockCallBack"; 
-static const char* ims = "INS_InsertCall";
-//static const char* ibb = "IBB_InsertCall";
-static void* handle = NULL;
+IBasicBlockRtn* basicblock_list  = NULL;
+MResetStatsRtn* resetstats_list  = NULL;
+MPrintStatsRtn* printstats_list  = NULL;
 
 static inline void handle_unable_load_module(const char *optarg)
 {
@@ -45,59 +38,53 @@ static inline void handle_unable_load_module(const char *optarg)
    	QTRACE_EXIT(-1);
 }
 
-static void register_stats_reset(RESET_STATS rs)  { client_reset_stats = rs; }
-static void register_stats_print(PRINT_STATS ps)  { client_print_stats = ps; }
-
-static void register_instruction_cb(INSTRUCTION_CALLBACK cb)
+static void add_function_to_list(void *f, const char *name, GenericRtn **list)
 {
    	/* it is possible that this module does not define a instruction callback */
-   	if (!cb) return;
+   	if (!f) return;
 
-   	InstructionRtn *head = instruction_list;
-   	if (!instruction_list) 
+   	GenericRtn *head = *list;
+   	if (!*list) 
 	{
-		head = instruction_list = (InstructionRtn*) malloc(sizeof(InstructionRtn));
+		head = *list = (GenericRtn*) malloc(sizeof(GenericRtn));
 	}
    	else 
    	{
      		/* get to the end of the linkedlist */
      		while(head->next) head = head->next;
-     		head->next = (InstructionRtn*) malloc(sizeof(InstructionRtn));
+     		head->next = (GenericRtn*) malloc(sizeof(GenericRtn));
      		head = head->next;
    	}
 
    	/* register the callback */
-   	head->rtn  = cb;
-   	head->next = NULL;
+   	head->rtn   = f;
+	head->mname = malloc(strlen(name)+1); 
+	memcpy(head->mname, name, strlen(name)+1);
+   	head->next  = NULL;
 
 	/* done */
 	return;
+
 }
 
-static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb)
+static void register_stats_reset(RESET_STATS rs, const char *name)  
+{ 
+	add_function_to_list(rs, name, &resetstats_list);
+}
+
+static void register_stats_print(PRINT_STATS ps, const char *name)  
+{ 
+	add_function_to_list(ps, name, &printstats_list);
+}
+
+static void register_instruction_cb(INSTRUCTION_CALLBACK cb, const char* name)
 {
-   	/* it is possible that this module does not define a basicblock callback */
-   	if (!cb) return;
+	add_function_to_list(cb, name, &instruction_list);
+}
 
-   	IBasicBlockRtn *head = basicblock_list;
-   	if (!basicblock_list) 
-	{
-		head = basicblock_list = (IBasicBlockRtn*) malloc(sizeof(IBasicBlockRtn));
-	}
-   	else 
-   	{
-     		/* get to the end of the linkedlist */
-     		while(head->next) head = head->next;
-     		head->next = (IBasicBlockRtn*) malloc(sizeof(IBasicBlockRtn));
-     		head = head->next;
-   	}
-
-   	/* register the callback */
-   	head->rtn  = cb;
-   	head->next = NULL;
-
-	/* done */
-	return;
+static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
+{
+	add_function_to_list(cb, name, &basicblock_list);
 }
 
 
@@ -164,32 +151,51 @@ void qtrace_instrument_parser(unsigned pos, ...)
 /// @ call to request instrumentation. 
 void qtrace_instrument_setup(const char *module)
 {
+	unsigned idx = 0;
+        void* handle = NULL;
+
    	/* load the instrumentation module */
    	if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
-	unsigned idx = 0;
-
-	void **InstructionCallBackArray = (void **)dlsym(handle, "InstructionCallBackArray"); 
-        unsigned InstructionCallBackNum = *(unsigned*) dlsym(handle, "InstructionCallBackNum");
+	/* register all instruction callbacks */
+	void **InstructionCallBackArray = (void **)
+					  dlsym(handle, 
+				          "InstructionCallBackArray"); 
+        unsigned InstructionCallBackNum = *(unsigned*) 
+                                          dlsym(handle, 
+                                          "InstructionCallBackNum");
+	assert(InstructionCallBackArray);
 	for(idx=0; idx<InstructionCallBackNum; ++idx) 
 	{
-		register_instruction_cb(((INSTRUCTION_CALLBACK)InstructionCallBackArray[idx]));
+		register_instruction_cb(((INSTRUCTION_CALLBACK)InstructionCallBackArray[idx]), module);
 	}
 
-	void **BasicBlockCallBackArray = (void **)dlsym(handle, "BasicBlockCallBackArray"); 
-        unsigned BasicBlockCallBackNum = *(unsigned*) dlsym(handle, "BasicBlockCallBackNum");
+	/* register all basicblock callbacks */
+	void **BasicBlockCallBackArray = (void **)
+                                         dlsym(handle, 
+                                         "BasicBlockCallBackArray"); 
+        unsigned BasicBlockCallBackNum = *(unsigned*) 
+                                         dlsym(handle, 
+                                         "BasicBlockCallBackNum");
+	assert(BasicBlockCallBackArray);
 	for(idx=0; idx<BasicBlockCallBackNum; ++idx) 
 	{
-   		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)BasicBlockCallBackArray[idx]);
+   		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)BasicBlockCallBackArray[idx], module);
 	}
 
-	register_stats_reset(*(void**) dlsym(handle, "ResetStats"));
-	register_stats_print(*(void**) dlsym(handle, "PrintStats"));
+	/* register module reset and print stats */
+	register_stats_reset(*(void**) dlsym(handle, "ResetStats"), module);
+	register_stats_print(*(void**) dlsym(handle, "PrintStats"), module);
 
    	/* register runtime functions with the instrumentation module */
-   	QTRACE_MODULE_FUNC_INIT module_function_init;
-   	module_function_init = dlsym(handle, ims);
-   	module_function_init(qtrace_instrument_parser);
+   	QTRACE_MODULE_FINIT module_finit;
+
+   	module_finit = (QTRACE_MODULE_FINIT)
+                       dlsym(handle, 
+                       "InitializeInstructionInstrument");
+	assert(module_finit);
+   	module_finit(qtrace_instrument_parser);
+
 
    	/* done */
 	return;
@@ -206,8 +212,24 @@ void qtrace_invoke_instruction_callback(unsigned arg)
     	while(curr_icc) 
     	{
        		assert(curr_icc->rtn);
-       		curr_icc->rtn(arg);
+       		((INSTRUCTION_CALLBACK)curr_icc->rtn)(arg);
        		curr_icc = curr_icc->next;
+    	} 
+	
+	/* done */
+    	return;
+}
+
+void qtrace_invoke_client_reset_stats(void)
+{
+	MResetStatsRtn* curr_mrs = resetstats_list;
+
+	/* call instruction callbacks one by one */
+    	while(curr_mrs) 
+    	{
+       		assert(curr_mrs->rtn);
+       		((RESET_STATS)curr_mrs->rtn)();
+       		curr_mrs = curr_mrs->next;
     	} 
 	
 	/* done */

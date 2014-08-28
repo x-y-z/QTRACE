@@ -20,41 +20,45 @@
 #ifndef QTRACE_HEADER_H
 #define QTRACE_HEADER_H
 
-#include <stdint.h>
 #include <stdio.h>
+#include <stdint.h> 
 
 #define QTRACE_MAX_CALLBACK_NUM 32
-unsigned InstructionCallBackNum = 0, BasicBlockCallBackNum = 0;
+short InstructionCallBackNum = 0, BasicBlockCallBackNum = 0;
+void* ResetStats = NULL, *PrintStats = NULL;
 void* InstructionCallBackArray[QTRACE_MAX_CALLBACK_NUM] = {0};
 void* BasicBlockCallBackArray[QTRACE_MAX_CALLBACK_NUM]  = {0};
-void* ResetStats = NULL, *PrintStats = NULL;
 
-void AddInstructionCallBack(void *callback)
-{
-  	InstructionCallBackArray[InstructionCallBackNum++] = callback;
-}
+/* functions to ask QTRACE to insert instrumentation */
+static QTRACE_INSERT_INSTRUMENT Module_INS_InsertCall;
+static QTRACE_INSERT_INSTRUMENT Module_IBB_InsertCall;
 
-void AddBasicBlockCallBack(void *callback)
-{
-  	BasicBlockCallBackArray[BasicBlockCallBackNum++] = callback;
-}
-
+/* AddStatsReset/AddStatsPrint - register stats reset/print */
 void AddStatsReset(void *reset) { ResetStats = reset; }
 void AddStatsPrint(void *print) { PrintStats = print; }
 
-static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_INS_InsertCall = NULL;
-static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_IBB_InsertCall = NULL;
-static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_STS_Reset = NULL;
-static QTRACE_INSERT_INSTRUMENT_CALLBACK Module_STS_Print = NULL;
-
-void INS_InsertCall(QTRACE_INSERT_INSTRUMENT_CALLBACK ins_insertcall_func)
+/* AddInstructionCallBack - register an instruction callback */
+void AddInstructionCallBack(void *cb)
 {
-    Module_INS_InsertCall = ins_insertcall_func;
+  	InstructionCallBackArray[InstructionCallBackNum++] = cb;
 }
 
-void IBB_InsertCall(QTRACE_INSERT_INSTRUMENT_CALLBACK ibb_insertcall_func)
+/* AddBasicBlockCallBack - register an basicblock callback */
+void AddBasicBlockCallBack(void *cb)
 {
-    Module_IBB_InsertCall = ibb_insertcall_func;
+  	BasicBlockCallBackArray[BasicBlockCallBackNum++] = cb;
+}
+
+/* hook up the QTRACE function to insert instrumentation */
+void InitializeInstructionInstrument(QTRACE_INSERT_INSTRUMENT cb)
+{
+    	Module_INS_InsertCall = cb;
+}
+
+/* hook up the QTRACE function to insert instrumentation */
+void InitializeBasicBlockInstrument(QTRACE_INSERT_INSTRUMENT cb)
+{
+    	Module_IBB_InsertCall = cb;
 }
 
 #endif /* QTRACE_HEADER_H */

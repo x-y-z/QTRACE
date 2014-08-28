@@ -67,9 +67,7 @@ static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu)
    	}
 	if (channel->_client_reset_) 
    	{
-		printf("reset call 0x%lx\n", client_reset_stats);
-   		/* flush code cache */
-		((void(*)())client_reset_stats)();
+		qtrace_invoke_client_reset_stats();
    		channel->_client_reset_ = 0;
    	}
 
