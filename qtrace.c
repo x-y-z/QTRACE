@@ -25,7 +25,7 @@
 
 
 /* the instrumentation context of the current instruction */
-InstrumentContext icontext; 
+InstrumentContext *ictxhead = NULL;
 
 InstructionRtn* instruction_list = NULL;
 IBasicBlockRtn* basicblock_list  = NULL;
@@ -87,6 +87,68 @@ static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
 	add_function_to_list(cb, name, &basicblock_list);
 }
 
+InstrumentContext *qtrace_allocate_new_icontext(void)
+{	
+	InstrumentContext* ct = malloc(sizeof(InstrumentContext));
+        memset(ct, 0x0, sizeof(InstrumentContext));
+
+	ct->next = ictxhead;
+	ictxhead = ct;
+	return ct;
+}
+
+void qtrace_free_all_icontexts(void)
+{
+	InstrumentContext *next = NULL;
+	while(ictxhead) 
+	{
+		next = ictxhead->next;
+		free(ictxhead);
+		ictxhead = next;
+	}
+	ictxhead = NULL;
+}
+
+#if 0
+#define QTRACE_SUM(var)  	\
+unsigned qtrace_sum_ ##var() {	\
+	InstrumentContext *head = ictxhead;		\
+	while(head) 					\
+	{					\
+		memfext |= head->memfext;	\
+		head = head->next;		\
+	}			\
+} 
+
+QTRACE_SUM(memfext);
+#endif
+
+unsigned qtrace_sum_memfext()
+{
+	unsigned memfext = 0;
+	InstrumentContext *head = ictxhead;
+	while(head) 
+	{
+		memfext |= ictxhead->memfext; 
+		head = head->next;
+	}
+	return memfext;
+}
+
+unsigned qtrace_sum_ipoint()
+{
+	unsigned ipoint = 0;
+	InstrumentContext *head = ictxhead;
+	while(head) 
+	{
+		ipoint |= ictxhead->ipoint; 
+		head = head->next;
+	}
+	return ipoint;
+}
+
+
+
 
 /// @ qtrace_instrument - this function is called by the instrumentatiom module.
 /// @ it parses what is requested by the instrumentation module into a icontext
@@ -96,10 +158,7 @@ void qtrace_instrument_parser(unsigned pos, ...)
   	va_list arguments;                  
   	va_start(arguments, pos);         
 
-        /* reset icontext */
-        memset(&icontext, 0x0, sizeof(InstrumentContext));
-
-	unsigned insertpoint = 0;
+	InstrumentContext* icontext = qtrace_allocate_new_icontext();
 
 	unsigned idx=0;
   	for (idx=0;idx<pos;idx++) 
@@ -108,15 +167,12 @@ void qtrace_instrument_parser(unsigned pos, ...)
      		switch (arg)
      		{
 		case QTRACE_IPOINT_BEFORE:
-			insertpoint = 0;
-			break;
 		case QTRACE_IPOINT_AFTER:
-			insertpoint = 1;
+			icontext->ipoint = arg; 
 			break;
 		/* instrumentation function address */
      		case QTRACE_IFUN:
-        		if (insertpoint)  icontext.pstifun = va_arg(arguments, uintptr_t);
-        		if (!insertpoint) icontext.preifun = va_arg(arguments, uintptr_t);
+        		icontext->ifun = va_arg(arguments, uintptr_t);
         		++idx;
         		break;
 		/* memory address instrumentation */
@@ -124,28 +180,29 @@ void qtrace_instrument_parser(unsigned pos, ...)
 		case QTRACE_MEMTRACE_VMA:
 		case QTRACE_MEMTRACE_PMA:
 		case QTRACE_MEMTRACE_VPMA:
-                        icontext.iargs[icontext.ciarg++] = arg;
-			icontext.memfext |= arg;
+                        icontext->iargs[icontext->ciarg++] = arg;
+			icontext->memfext |= arg;
 			break;
 		case QTRACE_PCTRACE_VMA:
-                        icontext.iargs[icontext.ciarg++] = arg;
-			icontext.pcfext |= arg;
+                        icontext->iargs[icontext->ciarg++] = arg;
+			icontext->pcfext |= arg;
 			break;
 		/* branch instrumentation */
      		case QTRACE_BRANCH_TARGET:
-                        icontext.iargs[icontext.ciarg++] = arg;
-        		icontext.btarget = true;
+                        icontext->iargs[icontext->ciarg++] = arg;
+        		icontext->btarget = true;
 			break;
 		/* process unique id instrumentation */
 		case QTRACE_PROCESS_UPID:
-                        icontext.iargs[icontext.ciarg++] = arg;
+                        icontext->iargs[icontext->ciarg++] = arg;
 			break;
 		/* expand memory value to preop and pstop value */
 		case QTRACE_MEMTRACE_VALUE:
-			arg = !insertpoint ? QTRACE_MEMTRACE_PREOP_VALUE : 
-					     QTRACE_MEMTRACE_PSTOP_VALUE ;
-			icontext.iargs[icontext.ciarg++]  = arg; 
-			icontext.memfext |= arg;
+			arg = (QTRACE_IPOINT_BEFORE == icontext->ipoint) ? 
+                               QTRACE_MEMTRACE_PREOP_VALUE : 
+			       QTRACE_MEMTRACE_PSTOP_VALUE ;
+			icontext->iargs[icontext->ciarg++]  = arg; 
+			icontext->memfext |= arg;
 			break;
      		default:
         		break;

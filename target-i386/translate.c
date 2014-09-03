@@ -89,15 +89,18 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
    s->qtrace_insncb = true;                            			\
 } while(0);
 
-#define QTRACE_PREOP_ICALL() (icontext.preifun)
+#define QTRACE_HAS_CALL(X)				\
+({	unsigned call = qtrace_sum_ipoint();	\
+	(X & call);				\
+})
+
 #define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          	do {  	\
-    if (QTRACE_PREOP_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
+    if (QTRACE_HAS_CALL(QTRACE_IPOINT_BEFORE)) tcg_gen_op0(INDEX_op_qtrace_preop_call);       	\
 } while(0);
 
 /* generate the post-insruction instrumentation */
-#define QTRACE_PSTOP_ICALL() (icontext.pstifun)
 #define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         	do {  	\
-    if (QTRACE_PSTOP_ICALL()) tcg_gen_op0(INDEX_op_qtrace_icall);       	\
+    if (QTRACE_HAS_CALL(QTRACE_IPOINT_BEFORE)) tcg_gen_op0(INDEX_op_qtrace_pstop_call);       	\
 } while(0);
 
 /// ------------------------------------------------------------- ///
@@ -111,7 +114,7 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 /// ------------------------------------------------------------- ///
 ///             QTRACE BRANCH INSTRUMENT UTILS                    ///
 /// ------------------------------------------------------------- ///
-#define QTRACE_BTARGET() (icontext.btarget)
+#define QTRACE_BTARGET() (0)
 #define QTRACE_BRANCH_PUSH_BTARGET_TCGV(X)                	do { 	\
     tcg_gen_st_tl(X, cpu_env, offsetof(CPUX86State, qtrace_btarget)); 	\
 } while(0);
@@ -553,7 +556,7 @@ static inline void gen_op_jmp_T0(void)
 
 static inline void qtrace_gen_push_pcfext_imm(target_ulong pc)
 {
-    if (icontext.pcfext) 
+    //if (icontext.pcfext) 
     {
        tcg_gen_movi_tl(cpu_tmp0, pc);
        tcg_gen_st_tl(cpu_tmp0, cpu_env, offsetof(CPUX86State, qtrace_progctr));
@@ -665,17 +668,18 @@ static inline void gen_op_addq_A0_reg_sN(int shift, int reg)
 
 static inline void gen_op_lds_T0_A0(int idx, DisasContext *s)
 {
+    unsigned memfext = qtrace_sum_memfext();
     int mem_index = (idx >> 2) - 1;
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld8s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld16s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     default:
     case OT_LONG:
-        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld32s(cpu_T[0], cpu_A0, QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     }
 }
@@ -683,21 +687,22 @@ static inline void gen_op_lds_T0_A0(int idx, DisasContext *s)
 static inline void gen_op_ld_v(int idx, TCGv t0, TCGv a0, DisasContext *s)
 {
     int mem_index = (idx >> 2) - 1;
+    unsigned memfext = qtrace_sum_memfext();
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld8u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index,  memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld16u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     case OT_LONG:
-        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld32u(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     default:
     case OT_QUAD:
         /* Should never happen on 32-bit targets.  */
 #ifdef TARGET_X86_64
-        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_ld64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index,  memfext));
 #endif
         break;
     }
@@ -722,21 +727,22 @@ static inline void gen_op_ld_T1_A0(int idx, DisasContext *s)
 static inline void gen_op_st_v(int idx, TCGv t0, TCGv a0, DisasContext *s)
 {
     int mem_index = (idx >> 2) - 1;
+    unsigned memfext = qtrace_sum_memfext();
     switch(idx & 3) {
     case OT_BYTE:
-        tcg_gen_qemu_st8(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_st8(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index,  memfext));
         break;
     case OT_WORD:
-        tcg_gen_qemu_st16(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_st16(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     case OT_LONG:
-        tcg_gen_qemu_st32(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_st32(t0, a0,  QTRACE_ADD_MEMTRACE(mem_index, memfext));
         break;
     default:
     case OT_QUAD:
         /* Should never happen on 32-bit targets.  */
 #ifdef TARGET_X86_64
-        tcg_gen_qemu_st64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index, icontext.memfext));
+        tcg_gen_qemu_st64(t0, a0, QTRACE_ADD_MEMTRACE(mem_index,  memfext));
 #endif
         break;
     }

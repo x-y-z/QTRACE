@@ -136,13 +136,14 @@ void qtrace_invoke_client_print_stats(void);
 
 /* instrumentations */
 typedef struct InstrumentContext  {
-    uintptr_t preifun;     /* instrumentation function */
-    uintptr_t pstifun;     /* instrumentation function */
-    unsigned  ciarg;    /* current iarg */
-    unsigned  iargs[QTRACE_MAX_IARGS]; /* instrumentation args */
-    unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
-    unsigned  pcfext;   /* this is the flag representing the instrmentation for program counter */
-    unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
+    	uintptr_t ifun;     /* instrumentation function */
+	unsigned  ipoint;   
+    	unsigned  ciarg;    /* current iarg */
+    	unsigned  iargs[QTRACE_MAX_IARGS]; /* instrumentation args */
+    	unsigned  memfext;  /* this is the flag representing the instrumentation by the client */
+    	unsigned  pcfext;   /* this is the flag representing the instrmentation for program counter */
+    	unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
+	struct InstrumentContext *next;
 } InstrumentContext;
 
 #define QTRACE_ADD_FLAG(s,flag) 	s->qtrace_insnflags|=(flag);

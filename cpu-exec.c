@@ -59,18 +59,10 @@ void cpu_resume_from_signal(CPUArchState *env, void *puc)
 extern DebugChannel *channel;
 static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu) 
 {
-	if (channel->_flushcc_) 
-   	{
-   		/* flush code cache */
-		tb_flush(cpu);
-   		channel->_flushcc_ = 0;
-   	}
-	if (channel->_client_reset_) 
-   	{
-		qtrace_invoke_client_reset_stats();
-   		channel->_client_reset_ = 0;
-   	}
-
+	if (channel->_flushcc_) tb_flush(cpu);
+	if (channel->_client_reset_) qtrace_invoke_client_reset_stats();
+	if (channel->_client_print_) qtrace_invoke_client_reset_stats();
+	memset(channel, 0, sizeof(DebugChannel));
 }
 
 /* Execute a TB, and fix up the CPU state afterwards if necessary */

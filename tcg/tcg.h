@@ -768,7 +768,9 @@ TCGv_i64 tcg_const_local_i64(int64_t val);
 extern InstrumentContext icontext;
 
 void tcg_register_jit(void *buf, size_t buf_size);
-void tcg_qtrace_instrument_call(TCGContext *s);
+void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *c);
+void tcg_qtrace_instrument_preop_call(TCGContext *s, InstrumentContext *c);
+void tcg_qtrace_instrument_pstop_call(TCGContext *s, InstrumentContext *c);
 
 /*
  * Memory helpers that will be used by TCG generated code.

@@ -35,6 +35,8 @@ static const char * const tcg_target_reg_names[TCG_TARGET_NB_REGS] = {
 };
 #endif
 
+extern InstrumentContext *ictxhead;
+
 static const int tcg_target_reg_alloc_order[] = {
 #if TCG_TARGET_REG_BITS == 64
     TCG_REG_RBP,
@@ -1927,9 +1929,19 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
         case glue(glue(INDEX_op_, x), _i32)
 #endif
 
+    InstrumentContext *h = ictxhead;
     switch(opc) {
-    case INDEX_op_qtrace_icall:
-        tcg_qtrace_instrument_call(s);
+    case INDEX_op_qtrace_preop_call:
+	while(h)
+	 {
+	   if (h->ipoint & QTRACE_IPOINT_BEFORE) tcg_qtrace_instrument_preop_call(s, h);
+	 }
+	break;
+    case INDEX_op_qtrace_pstop_call:
+	while(h)
+	 {
+	   if (h->ipoint & QTRACE_IPOINT_AFTER) tcg_qtrace_instrument_pstop_call(s, h);
+	 }
 	break;
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_EAX, args[0]);
@@ -2622,16 +2634,16 @@ static void tcg_qtrace_gen_epilogue(TCGContext *s)
 	tcg_out_pop(s, TCG_REG_RAX); 
 }
 
-void tcg_qtrace_instrument_call(TCGContext *s)
+void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
 {
-    unsigned idx = 0, ciarg = icontext.ciarg;
+    unsigned idx = 0, ciarg = icontext->ciarg;
 
     tcg_qtrace_gen_prologue(s);
 
     /* setup arguments for call one-by-one */
     for(idx = 0; idx<ciarg; ++idx)
     {
-        switch(icontext.iargs[idx])
+        switch(icontext->iargs[idx])
         {
         case QTRACE_MEMTRACE_VMA:
 	     QTRACE_POP_INSTRUMENT(idx, qtrace_vma);
@@ -2664,7 +2676,7 @@ void tcg_qtrace_instrument_call(TCGContext *s)
     }
 
     /* lastly, make the call */
-    uintptr_t ifun = icontext.preifun;
+    uintptr_t ifun = icontext->ifun;
     assert(ifun);
     tcg_out_calli(s, (uintptr_t)ifun);
 
@@ -2674,4 +2686,14 @@ void tcg_qtrace_instrument_call(TCGContext *s)
     assert(ciarg<6);
   
     return;
+}
+
+void tcg_qtrace_instrument_preop_call(TCGContext *s, InstrumentContext *ictx)
+{
+	tcg_qtrace_instrument_call(s, ictx);
+}
+
+void tcg_qtrace_instrument_pstop_call(TCGContext *s, InstrumentContext *ictx)
+{
+	tcg_qtrace_instrument_call(s, ictx);
 }
