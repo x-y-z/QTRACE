@@ -77,15 +77,16 @@ static void register_stats_print(PRINT_STATS ps, const char *name)
 	add_function_to_list(ps, name, &printstats_list);
 }
 
+static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
+{
+	add_function_to_list(cb, name, &basicblock_list);
+}
+
 static void register_instruction_cb(INSTRUCTION_CALLBACK cb, const char* name)
 {
 	add_function_to_list(cb, name, &instruction_list);
 }
 
-static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
-{
-	add_function_to_list(cb, name, &basicblock_list);
-}
 
 InstrumentContext *qtrace_allocate_new_icontext(void)
 {	
@@ -111,17 +112,20 @@ void qtrace_free_all_icontexts(void)
 
 #if 0
 #define QTRACE_SUM(var)  	\
-unsigned qtrace_sum_ ##var() {	\
+unsigned qtrace_sum_##var(void) {	\
+	unsigned ext = 0;	\
 	InstrumentContext *head = ictxhead;		\
 	while(head) 					\
 	{					\
-		memfext |= head->memfext;	\
+		ext |= head-> ##var;	\
 		head = head->next;		\
 	}			\
+	return ext;	\
 } 
 
 QTRACE_SUM(memfext);
-#endif
+#endif 
+
 
 unsigned qtrace_sum_memfext()
 {
@@ -146,8 +150,6 @@ unsigned qtrace_sum_ipoint()
 	}
 	return ipoint;
 }
-
-
 
 
 /// @ qtrace_instrument - this function is called by the instrumentatiom module.

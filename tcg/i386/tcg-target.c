@@ -1929,19 +1929,35 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
         case glue(glue(INDEX_op_, x), _i32)
 #endif
 
-    InstrumentContext *h = ictxhead;
+    InstrumentContext *h = NULL;
+    unsigned ipoint_before, ipoint_after;
     switch(opc) {
     case INDEX_op_qtrace_preop_call:
-	while(h)
-	 {
-	   if (h->ipoint & QTRACE_IPOINT_BEFORE) tcg_qtrace_instrument_preop_call(s, h);
-	 }
+	ipoint_before = 0;
+	h = args[0];
+	printf("h is 0x%lx\n", h);
+	while(h) {
+	   if(h->ipoint & QTRACE_IPOINT_BEFORE) 
+	   {
+	      tcg_qtrace_instrument_preop_call(s, h);
+	      ipoint_before ++; 
+	   }
+	   h = h->next;
+ 	}
+	assert(ipoint_before);
 	break;
     case INDEX_op_qtrace_pstop_call:
-	while(h)
-	 {
-	   if (h->ipoint & QTRACE_IPOINT_AFTER) tcg_qtrace_instrument_pstop_call(s, h);
-	 }
+	ipoint_after = 0;
+	h = args[0];
+	while(h) {
+	   if(h->ipoint & QTRACE_IPOINT_AFTER)
+	   {
+	      tcg_qtrace_instrument_pstop_call(s, h);
+	      ipoint_after ++; 
+	   }
+	   h = h->next;
+ 	}
+	assert(ipoint_after);
 	break;
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_EAX, args[0]);

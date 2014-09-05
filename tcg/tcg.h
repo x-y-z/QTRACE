@@ -273,16 +273,16 @@ typedef tcg_target_ulong TCGArg;
 
 typedef struct
 {
-    int i32;
+    long int i32;
 } TCGv_i32;
 
 typedef struct
 {
-    int i64;
+    long int i64;
 } TCGv_i64;
 
 typedef struct {
-    int iptr;
+    long int iptr;
 } TCGv_ptr;
 
 #define MAKE_TCGV_I32(i) __extension__                  \
@@ -301,8 +301,12 @@ typedef struct {
 
 #else /* !DEBUG_TCGV */
 
-typedef int TCGv_i32;
-typedef int TCGv_i64;
+/* FIX-ME-XIN */
+// typedef int TCGv_i32;
+// typedef int TCGv_i64;
+
+typedef long int TCGv_i32;
+typedef long int TCGv_i64;
 #if TCG_TARGET_REG_BITS == 32
 #define TCGv_ptr TCGv_i32
 #else

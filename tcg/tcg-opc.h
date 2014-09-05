@@ -180,8 +180,8 @@ DEF(debug_insn_start, 0, 0, 1, TCG_OPF_NOT_PRESENT)
 #endif
 DEF(exit_tb, 0, 0, 1, TCG_OPF_BB_END)
 DEF(goto_tb, 0, 0, 1, TCG_OPF_BB_END)
-DEF(qtrace_preop_call, 0, 0, 0, 0)
-DEF(qtrace_pstop_call, 0, 0, 0, 0)
+DEF(qtrace_preop_call, 0, 0, 1, 0)
+DEF(qtrace_pstop_call, 0, 0, 1, 0)
 
 #define IMPL_NEW_LDST \
     (TCG_OPF_CALL_CLOBBER | TCG_OPF_SIDE_EFFECTS \
