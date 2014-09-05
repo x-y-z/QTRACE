@@ -64,7 +64,6 @@ static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
 
 	/* done */
 	return;
-
 }
 
 static void register_stats_reset(RESET_STATS rs, const char *name)  
@@ -103,54 +102,11 @@ void qtrace_free_all_icontexts(void)
 	InstrumentContext *next = NULL;
 	while(ictxhead) 
 	{
-		next = ictxhead->next;
-		free(ictxhead);
+		next = ictxhead->next; free(ictxhead);
 		ictxhead = next;
 	}
 	ictxhead = NULL;
 }
-
-#if 0
-#define QTRACE_SUM(var)  	\
-unsigned qtrace_sum_##var(void) {	\
-	unsigned ext = 0;	\
-	InstrumentContext *head = ictxhead;		\
-	while(head) 					\
-	{					\
-		ext |= head-> ##var;	\
-		head = head->next;		\
-	}			\
-	return ext;	\
-} 
-
-QTRACE_SUM(memfext);
-#endif 
-
-
-unsigned qtrace_sum_memfext()
-{
-	unsigned memfext = 0;
-	InstrumentContext *head = ictxhead;
-	while(head) 
-	{
-		memfext |= ictxhead->memfext; 
-		head = head->next;
-	}
-	return memfext;
-}
-
-unsigned qtrace_sum_ipoint()
-{
-	unsigned ipoint = 0;
-	InstrumentContext *head = ictxhead;
-	while(head) 
-	{
-		ipoint |= ictxhead->ipoint; 
-		head = head->next;
-	}
-	return ipoint;
-}
-
 
 /// @ qtrace_instrument - this function is called by the instrumentatiom module.
 /// @ it parses what is requested by the instrumentation module into a icontext
@@ -240,7 +196,8 @@ void qtrace_instrument_setup(const char *module)
 	assert(InstructionCallBackArray);
 	for(idx=0; idx<InstructionCallBackNum; ++idx) 
 	{
-		register_instruction_cb(((INSTRUCTION_CALLBACK)InstructionCallBackArray[idx]), module);
+		register_instruction_cb(((INSTRUCTION_CALLBACK)
+				       InstructionCallBackArray[idx]), module);
 	}
 
 	/* register all basicblock callbacks */
@@ -253,7 +210,8 @@ void qtrace_instrument_setup(const char *module)
 	assert(BasicBlockCallBackArray);
 	for(idx=0; idx<BasicBlockCallBackNum; ++idx) 
 	{
-   		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)BasicBlockCallBackArray[idx], module);
+   		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)
+				       BasicBlockCallBackArray[idx], module);
 	}
 
 	/* register module reset and print stats */
@@ -268,7 +226,6 @@ void qtrace_instrument_setup(const char *module)
                        "InitializeInstructionInstrument");
 	assert(module_finit);
    	module_finit(qtrace_instrument_parser);
-
 
    	/* done */
 	return;
@@ -308,6 +265,54 @@ void qtrace_invoke_client_reset_stats(void)
 	/* done */
     	return;
 }
+
+
+#define QTRACE_SUM(var)  				\
+unsigned qtrace_sum_##var(void) {			\
+	unsigned ext = 0;				\
+	InstrumentContext *head = ictxhead;		\
+	while(head) 					\
+	{						\
+		ext |= head->#var;			\
+		head = head->next;			\
+	}						\
+	return ext;					\
+} 
+
+QTRACE_SUM(memfext);
+#undef QTRACE_SUM
+
+
+unsigned qtrace_sum_memfext()
+{
+	unsigned memfext = 0;
+	InstrumentContext *head = ictxhead;
+	while(head) 
+	{
+		memfext |= ictxhead->memfext; 
+		head = head->next;
+	}
+	return memfext;
+}
+
+unsigned qtrace_sum_ipoint()
+{
+	unsigned ipoint = 0;
+	InstrumentContext *head = ictxhead;
+	while(head) 
+	{
+		ipoint |= ictxhead->ipoint; 
+		head = head->next;
+	}
+	return ipoint;
+}
+
+unsigned qtrace_has_call(unsigned flag)
+{
+    	return qtrace_sum_ipoint() & flag;
+}
+
+
 
 
 

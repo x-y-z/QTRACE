@@ -124,6 +124,10 @@ void qtrace_invoke_instruction_callback(unsigned arg);
 void qtrace_invoke_client_reset_stats(void);
 void qtrace_invoke_client_print_stats(void);
 
+unsigned qtrace_sum_memfext(void);
+unsigned qtrace_sum_ipoint(void);
+unsigned qtrace_has_call(unsigned flag);
+
 
 /// ------------------------------------------------ ///
 /// miscellaneous 

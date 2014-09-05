@@ -85,39 +85,40 @@ extern InstrumentContext *ictxhead;
 ///             QTRACE GENERAL INSTRUMENT UTILS                   ///
 /// ------------------------------------------------------------- ///
 #define QTRACE_CLIENT_MODULE(s)                           		\
-do { /* call instruction instrumentation routine */            		\
-   qtrace_invoke_instruction_callback(s->qtrace_insnflags);  		\
-   s->qtrace_insncb = true;                            			\
+do									\
+{ 	/* call instruction instrumentation routine */        		\
+   	qtrace_invoke_instruction_callback(s->qtrace_insnflags);  	\
+   	s->qtrace_insncb = true;                            		\
 } while(0);
-
-#define QTRACE_HAS_CALL(X)						\
-({									\
-    unsigned call = qtrace_sum_ipoint();				\
-    unsigned ipnt = X & call;						\
-    ipnt>0;								\
-})
 
 /* FIX-ME-XIN */
 #define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          		\
-do { /* generate the pre-insruction instrumentation */			\
-    if (QTRACE_HAS_CALL(QTRACE_IPOINT_BEFORE))				\
-	tcg_gen_op1_i64(INDEX_op_qtrace_preop_call, 			\
-			MAKE_TCGV_PTR((uintptr_t)ictxhead));        	\
+do 									\
+{   	/* generate the pre-insruction instrumentation */		\
+	if (qtrace_has_call(QTRACE_IPOINT_BEFORE))			\
+	{								\
+		tcg_gen_op1_i64(INDEX_op_qtrace_preop_call, 		\
+				MAKE_TCGV_PTR((uintptr_t)ictxhead));   	\
+	}								\
 } while(0);
 
 #define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         		\
-do { /* generate the post-insruction instrumentation */ 		\
-   if (QTRACE_HAS_CALL(QTRACE_IPOINT_AFTER))				\
-	tcg_gen_op1_i64(INDEX_op_qtrace_pstop_call,			\
-			MAKE_TCGV_PTR((uintptr_t)ictxhead));       	\
+do									\
+{ 	/* generate the post-insruction instrumentation */ 		\
+   	if (qtrace_has_call(QTRACE_IPOINT_AFTER))			\
+	{								\
+		tcg_gen_op1_i64(INDEX_op_qtrace_pstop_call,		\
+				MAKE_TCGV_PTR((uintptr_t)ictxhead));    \
+	}								\
 } while(0);
 
 /// ------------------------------------------------------------- ///
 ///             QTRACE PC INSTRUMENT UTILS                        ///
 /// ------------------------------------------------------------- ///
 #define QTRACE_GENERATE_PC_INSTRUMENT(pc)                 		\
-do { /* generate the pc instrumentation */   				\
-   qtrace_gen_push_pcfext_imm(pc);					\
+do									\
+{ 	/* generate the pc instrumentation */   			\
+   	qtrace_gen_push_pcfext_imm(pc);					\
 } while(0);
 
 
@@ -126,16 +127,20 @@ do { /* generate the pc instrumentation */   				\
 /// ------------------------------------------------------------- ///
 #define QTRACE_BTARGET() (0)
 #define QTRACE_BRANCH_PUSH_BTARGET_TCGV(X)                		\
-do { /* generate the branch instrumentation */				\
-    tcg_gen_st_tl(X, cpu_env, offsetof(CPUX86State, qtrace_btarget)); 	\
+do									\
+{ 	/* generate the branch instrumentation */			\
+    	tcg_gen_st_tl(X, cpu_env, offsetof(CPUX86State,                 \
+		      qtrace_btarget)); 				\
 } while(0);
 
 #define QTRACE_BRANCH_PUSH_BTARGET_IM(X)               			\
-do { /* generate the branch instrumentation */				\
-    if (QTRACE_BTARGET()) {						\
-        tcg_gen_movi_tl(cpu_tmp0, X);                        		\
-        QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);           		\
-    }									\
+do									\
+{ 	/* generate the branch instrumentation */			\
+    	if (QTRACE_BTARGET())                                           \
+	{								\
+        	tcg_gen_movi_tl(cpu_tmp0, X);                        	\
+        	QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);           	\
+    	}								\
 } while(0);
 
 
