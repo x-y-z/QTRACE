@@ -108,7 +108,7 @@ void
 /// ------------------------------------------------ ///
 /// instrumentation module metadata 
 /// ------------------------------------------------ ///
-struct genericRtn { void *rtn; const char* mname; struct genericRtn *next; };
+struct genericRtn { void *rtn; char* mname; struct genericRtn *next; };
 typedef struct genericRtn GenericRtn;
 typedef struct genericRtn InstructionRtn;
 typedef struct genericRtn IBasicBlockRtn;
@@ -118,15 +118,11 @@ typedef struct genericRtn MPrintStatsRtn;
 /// ------------------------------------------------ ///
 /// instrumentation function list
 /// ------------------------------------------------ ///
-void qtrace_instrument_parser(unsigned pos, ...); 
 void qtrace_instrument_setup(const char*);
 void qtrace_invoke_instruction_callback(unsigned arg);
-void qtrace_invoke_client_reset_stats(void);
-void qtrace_invoke_client_print_stats(void);
-
-unsigned qtrace_sum_memfext(void);
-unsigned qtrace_sum_ipoint(void);
-unsigned qtrace_has_call(unsigned flag);
+void qtrace_invoke_ibasicblock_callback(unsigned arg);
+void qtrace_invoke_client_reset_stats(const char*);
+void qtrace_invoke_client_print_stats(const char*);
 
 
 /// ------------------------------------------------ ///
@@ -149,6 +145,23 @@ typedef struct InstrumentContext  {
     	unsigned  btarget;  /* this is the flag to indicate instrumenting the branch target */
 	struct InstrumentContext *next;
 } InstrumentContext;
+
+#define INEXT(s) s = s->next
+
+void qtrace_instrument_parser(unsigned pos, ...); 
+InstrumentContext* qtrace_get_current_icontext_list(void);
+void qtrace_set_current_icontext_list(InstrumentContext *ictx );
+void qtrace_allocate_icontext_root(void);
+void qtrace_allocate_new_icontext(InstrumentContext **root);
+void qtrace_free_root_icontext(InstrumentContext *root); 
+void qtrace_free_all_icontexts(void);
+void qtrace_increment_uiid(void);
+void qtrace_verify_last_icontext(InstrumentContext *);
+
+
+unsigned qtrace_sum_memfext(InstrumentContext *root);
+unsigned qtrace_sum_ipoint(InstrumentContext *root);
+unsigned qtrace_has_call(InstrumentContext *root, unsigned flag);
 
 #define QTRACE_ADD_FLAG(s,flag) 	s->qtrace_insnflags|=(flag);
 #define QTRACE_ADD_COND_FLAG(s,flag,c) 	{if(c) s->qtrace_insnflags|=(flag);}

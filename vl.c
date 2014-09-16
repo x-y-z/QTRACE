@@ -1471,7 +1471,7 @@ static void initialize_adebug(void)
 
    channel = (DebugChannel*)shmat(shared_id, NULL, 0);
    assert(channel);
-   printf("create channel 0x%lx with key %d\n", channel, SHARED_MEM_KEY);
+   printf("create channel 0x%lx with key %d\n", (long unsigned int)channel, SHARED_MEM_KEY);
 }
 
 static void adebug_free(void ) {  shmdt(channel);  }

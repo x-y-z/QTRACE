@@ -26,7 +26,10 @@
 typedef struct {
   int _client_reset_;
   int _client_print_;
+  int _client_reset_all_;
+  int _client_print_all_;
   int _flushcc_;
+  char module[128];
 } DebugChannel;
 
 #endif /* QEMU_ADEBUG_H */

@@ -154,6 +154,15 @@ int cpu_gen_code(CPUArchState *env, TranslationBlock *tb, int *gen_code_size_ptr
                        exceptions */
     ti = profile_getclock();
 #endif
+    /* free all the instrumentation context. start anew */
+    qtrace_free_all_icontexts();
+
+#if 0 
+    static int count = 0;
+    if (count++)
+    printf("%d gene blocks\n", count);
+#endif
+
     tcg_func_start(s);
 
     gen_intermediate_code(env, tb);
@@ -211,6 +220,8 @@ static int cpu_restore_state_from_tb(TranslationBlock *tb, CPUArchState *env,
     ti = profile_getclock();
 #endif
     tcg_func_start(s);
+
+    qtrace_free_all_icontexts();
 
     gen_intermediate_code_pc(env, tb);
 

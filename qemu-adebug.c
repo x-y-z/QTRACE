@@ -24,6 +24,7 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include "qemu-adebug.h"
+#include <stdbool.h>
 
 /// --------------------------------------------
 /* connect/disconnect the shared memory */
@@ -45,29 +46,44 @@ static inline void disconnect(DebugChannel *channel) { shmdt(channel); }
 static const char* flushcc 		= 	"--flushcc";
 static const char* client_reset 	= 	"--client-reset";
 static const char* client_print 	= 	"--client-print";
+static const char* client_reset_all 	= 	"--client-reset-all";
+static const char* client_print_all 	= 	"--client-print-all";
 
-#define QTRACE_HANDLE_CONNECTION(cmd)          				\
-static inline void handle_connection_##cmd(DebugChannel *channel)   	\
-{ 									\
-   	channel->_##cmd##_ = 1;   					\
-   	QTRACE_WAIT_COMMAND_HANDLED(channel->_##cmd##_);		\
-	printf("Command Successful\n");					\
+#define QTRACE_HANDLE_CONNECTION(cmd)          			   	\
+static inline void handle_connection_##cmd(DebugChannel *channel,  	\
+					   const char *module, 	   	\
+					   bool *valid) 	   	\
+{ 								   	\
+	if (module) memcpy(channel->module, module, strlen(module));    \
+   	channel->_##cmd##_ = 1;   				   	\
+   	QTRACE_WAIT_COMMAND_HANDLED(channel->_##cmd##_);	   	\
+	*valid = true;						   	\
 } 
-
 QTRACE_HANDLE_CONNECTION(flushcc);
 QTRACE_HANDLE_CONNECTION(client_reset);
 QTRACE_HANDLE_CONNECTION(client_print);
+QTRACE_HANDLE_CONNECTION(client_reset_all);
+QTRACE_HANDLE_CONNECTION(client_print_all);
 #undef QTRACE_HANDLE_CONNECTION
 
 
 static inline void handle_connection_success(int argc, char** argv, DebugChannel *channel) 
 {
   	int i;
-  	for (i=0;i<argc;++i)
+  	for (i=1;i<argc;++i)
   	{
-     		if (!strcmp(argv[i], flushcc)) handle_connection_flushcc(channel);
-     		if (!strcmp(argv[i], client_reset)) handle_connection_client_reset(channel);
-     		if (!strcmp(argv[i], client_print)) handle_connection_client_print(channel);
+		bool valid_command = false;
+     		if (!strcmp(argv[i], flushcc)) handle_connection_flushcc(channel, 0, &valid_command);
+     		if (!strcmp(argv[i], client_reset)) handle_connection_client_reset(channel, argv[++i], &valid_command);
+     		if (!strcmp(argv[i], client_print)) handle_connection_client_print(channel, argv[++i], &valid_command);
+     		if (!strcmp(argv[i], client_reset_all)) handle_connection_client_reset_all(channel, 0, &valid_command);
+     		if (!strcmp(argv[i], client_print_all)) handle_connection_client_print_all(channel, 0, &valid_command);
+
+		if (!valid_command) 
+		{
+		        QTRACE_ERROR("invalid command %s\n", argv[i]);
+  			QTRACE_EXIT(-1);
+		}
   	}
 
 	return;
@@ -79,11 +95,28 @@ static void handle_connection_error(void)
   	QTRACE_EXIT(-1);
 }
 
+static void print_help(void)
+{
+	printf("qemu-adebug		asynchronous debugging tool for QTRACE\n");
+	printf("--flushcc  		flush code cache\n");
+	printf("--client-reset		reset client instrumentation plugin\n");
+	printf("--client-print		print client instrumentation plugin\n");
+	printf("--client-reset-all	reset client instrumentation plugin\n");
+	printf("--client-print-all	print client instrumentation plugin\n");
+}
+
 int main(int argc, char **argv)
 {
+	/* calling help ? */
+	if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) 
+	{
+		print_help();
+		exit(0);
+	}
+
    	/* connect to the shared memory */
    	DebugChannel *channel=connect();
-
+	
    	if (!channel) handle_connection_error();
    	else handle_connection_success(argc, argv, channel); 
 

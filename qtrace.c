@@ -25,12 +25,20 @@
 
 
 /* the instrumentation context of the current instruction */
-InstrumentContext *ictxhead = NULL;
+static InstrumentContext *ictxhead = NULL;
 
 InstructionRtn* instruction_list = NULL;
-IBasicBlockRtn* basicblock_list  = NULL;
+IBasicBlockRtn* ibasicblock_list = NULL;
 MResetStatsRtn* resetstats_list  = NULL;
 MPrintStatsRtn* printstats_list  = NULL;
+
+/* the current and last unique instruction id */
+unsigned long long uiid = 0;
+unsigned long long last_uiid = 0;
+
+#define MAX_ICONTEXT_ROOT 256
+static unsigned rootcount;
+static InstrumentContext* rootarray[MAX_ICONTEXT_ROOT];
 
 static inline void handle_unable_load_module(const char *optarg)
 {
@@ -59,53 +67,86 @@ static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
    	/* register the callback */
    	head->rtn   = cb;
 	head->mname = malloc(strlen(name)+1); 
-	memcpy(head->mname, (char*)name, strlen(name)+1);
+	memcpy(head->mname, name, strlen(name)+1);
    	head->next  = NULL;
 
 	/* done */
 	return;
 }
 
+/// @ register_stats_reset - register a function to resetstats_list list.
 static void register_stats_reset(RESET_STATS rs, const char *name)  
 { 
 	add_function_to_list(rs, name, &resetstats_list);
 }
-
+/// @ register_stats_print - register a function to printstats_list list.
 static void register_stats_print(PRINT_STATS ps, const char *name)  
 { 
 	add_function_to_list(ps, name, &printstats_list);
 }
-
-static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
-{
-	add_function_to_list(cb, name, &basicblock_list);
-}
-
+/// @ register_instruction_cb - register a function to instruction_list list.
 static void register_instruction_cb(INSTRUCTION_CALLBACK cb, const char* name)
 {
 	add_function_to_list(cb, name, &instruction_list);
 }
-
-
-InstrumentContext *qtrace_allocate_new_icontext(void)
-{	
-	InstrumentContext* ct = malloc(sizeof(InstrumentContext));
-        memset(ct, 0x0, sizeof(InstrumentContext));
-
-	ct->next = ictxhead;
-	ictxhead = ct;
-	return ct;
+/// @ register_ibasicblock_cb - register a function to basicblock_list list.
+static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
+{
+	add_function_to_list(cb, name, &ibasicblock_list);
 }
 
-void qtrace_free_all_icontexts(void)
+/// @ qtrace_allocate_icontext_root - allocate a icontext root pointer.
+inline void qtrace_allocate_icontext_root(void) { rootcount++; }
+/// @ qtrace_increment_uiid - increment the uiid. one more instruction has passed.
+inline void qtrace_increment_uiid(void) { uiid ++; }
+/// @ qtrace_get_current_icontext_list - return the current icontext head.
+inline InstrumentContext* qtrace_get_current_icontext_list(void)  {  return ictxhead; }
+/// @ qtrace_set_current_icontext_list - set the current icontext head.
+inline void qtrace_set_current_icontext_list(InstrumentContext *ictx) { ictxhead = ictx; }
+
+/// @ qtrace_allocate_new_icontext - allocate a new instrumentation context
+/// @ pointed by root.
+void qtrace_allocate_new_icontext(InstrumentContext **root)
+{	
+	InstrumentContext* newhead = malloc(sizeof(InstrumentContext));
+        memset(newhead, 0x0, sizeof(InstrumentContext));
+	newhead->next = *root;
+	*root = newhead;
+	ictxhead = newhead;
+}
+
+/// @ qtrace_free_all_icontexts - free all allocated instrumentation context
+/// @ pointed by root.
+void qtrace_free_root_icontext(InstrumentContext *root) 
 {
 	InstrumentContext *next = NULL;
-	while(ictxhead) 
+	while(root) 
 	{
-		next = ictxhead->next; free(ictxhead);
-		ictxhead = next;
+		next = root->next;  free(root);
+		root = next;
 	}
-	ictxhead = NULL;
+	return;
+}
+
+/// @ qtrace_free_all_icontexts - free all the allocated instrumentation context.
+void qtrace_free_all_icontexts(void)
+{
+	unsigned idx;
+	for(idx = 0; idx < rootcount; ++idx)
+	{
+		qtrace_free_root_icontext(rootarray[idx]);
+		rootarray[idx] = NULL;
+	}	
+	rootcount = 0;
+	ictxhead  = NULL;
+	return;
+}
+
+/// @ qtrace_verify_last_icontext - make sure the icontext makes sense before 
+/// @ generating instrumetation.
+void qtrace_verify_last_icontext(InstrumentContext *ictx)
+{
+	if (!ictx->ifun) QTRACE_ERROR("icontext ifun is NULL\n"); 
 }
 
 /// @ qtrace_instrument - this function is called by the instrumentatiom module.
@@ -116,7 +157,16 @@ void qtrace_instrument_parser(unsigned pos, ...)
   	va_list arguments;                  
   	va_start(arguments, pos);         
 
-	InstrumentContext* icontext = qtrace_allocate_new_icontext();
+	/* every instruction will call qtrace_instrument_parser only once.
+	   and 1 icontext list will be allocated */
+	if (last_uiid != uiid)
+	{
+		qtrace_allocate_icontext_root();
+	}
+
+        /* allocate a icontext in the current rootarray */
+	assert(rootcount);
+	qtrace_allocate_new_icontext(&rootarray[rootcount-1]);
 
 	unsigned idx=0;
   	for (idx=0;idx<pos;idx++) 
@@ -126,11 +176,11 @@ void qtrace_instrument_parser(unsigned pos, ...)
      		{
 		case QTRACE_IPOINT_BEFORE:
 		case QTRACE_IPOINT_AFTER:
-			icontext->ipoint = arg; 
+			ictxhead->ipoint = arg; 
 			break;
 		/* instrumentation function address */
      		case QTRACE_IFUN:
-        		icontext->ifun = va_arg(arguments, uintptr_t);
+        		ictxhead->ifun = va_arg(arguments, uintptr_t);
         		++idx;
         		break;
 		/* memory address instrumentation */
@@ -138,29 +188,29 @@ void qtrace_instrument_parser(unsigned pos, ...)
 		case QTRACE_MEMTRACE_VMA:
 		case QTRACE_MEMTRACE_PMA:
 		case QTRACE_MEMTRACE_VPMA:
-                        icontext->iargs[icontext->ciarg++] = arg;
-			icontext->memfext |= arg;
+                        ictxhead->iargs[ictxhead->ciarg++] = arg;
+			ictxhead->memfext |= arg;
 			break;
 		case QTRACE_PCTRACE_VMA:
-                        icontext->iargs[icontext->ciarg++] = arg;
-			icontext->pcfext |= arg;
+                        ictxhead->iargs[ictxhead->ciarg++] = arg;
+			ictxhead->pcfext |= arg;
 			break;
 		/* branch instrumentation */
      		case QTRACE_BRANCH_TARGET:
-                        icontext->iargs[icontext->ciarg++] = arg;
-        		icontext->btarget = true;
+                        ictxhead->iargs[ictxhead->ciarg++] = arg;
+        		ictxhead->btarget = true;
 			break;
 		/* process unique id instrumentation */
 		case QTRACE_PROCESS_UPID:
-                        icontext->iargs[icontext->ciarg++] = arg;
+                        ictxhead->iargs[ictxhead->ciarg++] = arg;
 			break;
 		/* expand memory value to preop and pstop value */
 		case QTRACE_MEMTRACE_VALUE:
-			arg = (QTRACE_IPOINT_BEFORE == icontext->ipoint) ? 
+			arg = (QTRACE_IPOINT_BEFORE == ictxhead->ipoint) ? 
                                QTRACE_MEMTRACE_PREOP_VALUE : 
 			       QTRACE_MEMTRACE_PSTOP_VALUE ;
-			icontext->iargs[icontext->ciarg++]  = arg; 
-			icontext->memfext |= arg;
+			ictxhead->iargs[ictxhead->ciarg++]  = arg; 
+			ictxhead->memfext |= arg;
 			break;
      		default:
         		break;
@@ -169,10 +219,13 @@ void qtrace_instrument_parser(unsigned pos, ...)
 
   	va_end (arguments);          
 
+	last_uiid = uiid;
+
 	/* briefly verify the validity of the instrumentations */
+	qtrace_verify_last_icontext(ictxhead);
 
 	/* done */
-	return;
+	return ;
 }
 
 /// @ qtrace_instrument_parse - this function takes the name of the module and setup
@@ -183,16 +236,24 @@ void qtrace_instrument_setup(const char *module)
 	unsigned idx = 0;
         void* handle = NULL;
 
+	const char *ResetStatsName = "ResetStats";
+	const char *PrintStatsName = "PrintStats";
+	const char *InstructionCBArrayName = "InstructionCallBackArray";
+	const char *InstructionCBNumName   = "InstructionCallBackNum";
+	const char *BasicBlockCBArrayName  = "BasicBlockCallBackArray";
+	const char *BasicBlockCBNumName    = "BasicBlockCallBackNum";
+	const char *InitInsInstrumentName  = "InitializeInstructionInstrument";
+
    	/* load the instrumentation module */
    	if (!(handle=dlopen(module, RTLD_LAZY))) handle_unable_load_module(module);
 
 	/* register all instruction callbacks */
 	void **InstructionCallBackArray = (void **)
 					  dlsym(handle, 
-				          "InstructionCallBackArray"); 
+				          InstructionCBArrayName); 
         unsigned InstructionCallBackNum = *(unsigned*) 
                                           dlsym(handle, 
-                                          "InstructionCallBackNum");
+                                          InstructionCBNumName);
 	assert(InstructionCallBackArray);
 	for(idx=0; idx<InstructionCallBackNum; ++idx) 
 	{
@@ -202,11 +263,9 @@ void qtrace_instrument_setup(const char *module)
 
 	/* register all basicblock callbacks */
 	void **BasicBlockCallBackArray = (void **)
-                                         dlsym(handle, 
-                                         "BasicBlockCallBackArray"); 
+                                         dlsym(handle, BasicBlockCBArrayName); 
         unsigned BasicBlockCallBackNum = *(unsigned*) 
-                                         dlsym(handle, 
-                                         "BasicBlockCallBackNum");
+                                         dlsym(handle, BasicBlockCBNumName);
 	assert(BasicBlockCallBackArray);
 	for(idx=0; idx<BasicBlockCallBackNum; ++idx) 
 	{
@@ -215,15 +274,14 @@ void qtrace_instrument_setup(const char *module)
 	}
 
 	/* register module reset and print stats */
-	register_stats_reset(*(void**) dlsym(handle, "ResetStats"), module);
-	register_stats_print(*(void**) dlsym(handle, "PrintStats"), module);
+	register_stats_reset(*(void**) dlsym(handle, ResetStatsName), module);
+	register_stats_print(*(void**) dlsym(handle, PrintStatsName), module);
 
    	/* register runtime functions with the instrumentation module */
    	QTRACE_MODULE_FINIT module_finit;
 
    	module_finit = (QTRACE_MODULE_FINIT)
-                       dlsym(handle, 
-                       "InitializeInstructionInstrument");
+                       dlsym(handle, InitInsInstrumentName);
 	assert(module_finit);
    	module_finit(qtrace_instrument_parser);
 
@@ -234,39 +292,61 @@ void qtrace_instrument_setup(const char *module)
 /// @ qtrace_invoke_instruction_callback - this function goes through the list 
 /// @ of all instruction callbacks and call them one by one. the callbacks then
 /// @ tells QTRACE what to instrument. 
-void qtrace_invoke_instruction_callback(unsigned arg)
-{
-	InstructionRtn* curr_icc = instruction_list;
+#define qtrace_invoke_callback(unit, ulist)			\
+void qtrace_invoke_##unit##_callback(unsigned arg)		\
+{								\
+	GenericRtn* curr_icc = ulist;				\
+    	while(curr_icc) 					\
+    	{							\
+       		assert(curr_icc->rtn);				\
+       		((INSTRUCTION_CALLBACK)curr_icc->rtn)(arg);	\
+       		curr_icc = curr_icc->next;			\
+    	} 							\
+    	return;							\
+}	
 
-	/* call instruction callbacks one by one */
-    	while(curr_icc) 
-    	{
-       		assert(curr_icc->rtn);
-       		((INSTRUCTION_CALLBACK)curr_icc->rtn)(arg);
-       		curr_icc = curr_icc->next;
-    	} 
-	
-	/* done */
-    	return;
-}
+qtrace_invoke_callback(instruction, instruction_list);
+qtrace_invoke_callback(ibasicblock, ibasicblock_list);
+#undef qtrace_invoke_callback
 
-void qtrace_invoke_client_reset_stats(void)
-{
-	MResetStatsRtn* curr_mrs = resetstats_list;
+/// @ qtrace_invoke_client - call client defined reset/print functions.
+#define qtrace_invoke_client(rtnm, flist)			\
+void qtrace_invoke_client_##rtnm(const char* name)		\
+{								\
+	GenericRtn* curr_rtn = (GenericRtn*) flist;		\
+	bool func_done = false;					\
+    	while(curr_rtn)						\
+    	{							\
+       		assert(curr_rtn->rtn);				\
+		if (name) 					\
+		{						\
+			if (!strcmp(name, curr_rtn->mname))	\
+			{					\
+				((RESET_STATS)curr_rtn->rtn)();	\
+				func_done = true;		\
+				break;				\
+			} 					\
+		}						\
+		else 						\
+		{						\
+			((RESET_STATS)curr_rtn->rtn)();		\
+		}						\
+       		curr_rtn = curr_rtn->next;			\
+    	} 							\
+								\
+	if (name && !func_done) 				\
+	{							\
+		QTRACE_ERROR("call %s failed\n", name);		\
+	}							\
+	return;							\
+}							
 
-	/* call instruction callbacks one by one */
-    	while(curr_mrs) 
-    	{
-       		assert(curr_mrs->rtn);
-       		((RESET_STATS)curr_mrs->rtn)();
-       		curr_mrs = curr_mrs->next;
-    	} 
-	
-	/* done */
-    	return;
-}
+qtrace_invoke_client(reset_stats, resetstats_list);
+qtrace_invoke_client(print_stats, printstats_list);
+#undef qtrace_invoke_client
 
 
+#if 0
 #define QTRACE_SUM(var)  				\
 unsigned qtrace_sum_##var(void) {			\
 	unsigned ext = 0;				\
@@ -281,35 +361,36 @@ unsigned qtrace_sum_##var(void) {			\
 
 QTRACE_SUM(memfext);
 #undef QTRACE_SUM
+#endif
 
 
-unsigned qtrace_sum_memfext()
+unsigned qtrace_sum_memfext(InstrumentContext *root)
 {
 	unsigned memfext = 0;
-	InstrumentContext *head = ictxhead;
+	InstrumentContext *head = root;
 	while(head) 
 	{
 		memfext |= ictxhead->memfext; 
-		head = head->next;
+		INEXT(head);
 	}
 	return memfext;
 }
 
-unsigned qtrace_sum_ipoint()
+unsigned qtrace_sum_ipoint(InstrumentContext *root)
 {
 	unsigned ipoint = 0;
-	InstrumentContext *head = ictxhead;
+	InstrumentContext *head = root;
 	while(head) 
 	{
-		ipoint |= ictxhead->ipoint; 
-		head = head->next;
+		ipoint |= head->ipoint; 
+		INEXT(head);
 	}
 	return ipoint;
 }
 
-unsigned qtrace_has_call(unsigned flag)
+unsigned qtrace_has_call(InstrumentContext *root, unsigned flag)
 {
-    	return qtrace_sum_ipoint() & flag;
+    	return qtrace_sum_ipoint(root) & flag;
 }
 
 

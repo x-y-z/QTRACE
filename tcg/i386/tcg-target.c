@@ -113,12 +113,6 @@ static bool have_cmov;
 # define have_cmov 0
 #endif
 
-#define QTRACE_POP_INSTRUMENT(X,Y) 			do {	\
-      tcg_out_modrm_offset(s, OPC_MOVL_GvEv, 		   	\
-                           tcg_target_call_iarg_regs[X],	\
-                           TCG_AREG0, 				\
-                           offsetof(CPUArchState, Y));		\
-} while(0);
 
 static uint8_t *tb_ret_addr;
 
@@ -1929,35 +1923,26 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
         case glue(glue(INDEX_op_, x), _i32)
 #endif
 
-    InstrumentContext *h = NULL;
+    InstrumentContext *ictx = NULL;
     unsigned ipoint_before, ipoint_after;
     switch(opc) {
     case INDEX_op_qtrace_preop_call:
-	ipoint_before = 0;
-	h = args[0];
-	printf("h is 0x%lx\n", h);
-	while(h) {
-	   if(h->ipoint & QTRACE_IPOINT_BEFORE) 
-	   {
-	      tcg_qtrace_instrument_preop_call(s, h);
-	      ipoint_before ++; 
+        ictx = args[0];
+	while(ictx) {
+	   if(qtrace_has_call(ictx, QTRACE_IPOINT_BEFORE)) {
+	      tcg_qtrace_instrument_preop_call(s, ictx);
 	   }
-	   h = h->next;
+           ictx = ictx->next;
  	}
-	assert(ipoint_before);
 	break;
     case INDEX_op_qtrace_pstop_call:
-	ipoint_after = 0;
-	h = args[0];
-	while(h) {
-	   if(h->ipoint & QTRACE_IPOINT_AFTER)
-	   {
-	      tcg_qtrace_instrument_pstop_call(s, h);
-	      ipoint_after ++; 
+        ictx = args[0];
+	while(ictx) {
+	   if(qtrace_has_call(ictx, QTRACE_IPOINT_AFTER)) {
+	      tcg_qtrace_instrument_pstop_call(s, ictx);
 	   }
-	   h = h->next;
+           ictx = ictx->next;
  	}
-	assert(ipoint_after);
 	break;
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_EAX, args[0]);
@@ -2650,42 +2635,78 @@ static void tcg_qtrace_gen_epilogue(TCGContext *s)
 	tcg_out_pop(s, TCG_REG_RAX); 
 }
 
+/* QTRACE - macros to set up arguments for instrumentation calls */
+static void qtrace_pop_instrument_into_reg(TCGContext *s, int rm, int offset)
+{
+   tcg_out_modrm_offset(s, OPC_MOVL_GvEv, tcg_target_call_iarg_regs[rm], TCG_AREG0, offset);		
+}
+
+static void qtrace_pop_instrument_into_stk(TCGContext *s, int rm, int offset)
+{
+   tcg_out_modrm_offset(s, OPC_MOVL_GvEv, TCG_REG_RAX, TCG_AREG0, offset);		
+   tcg_out_push(s, TCG_REG_RAX);             
+}
+
+static void tcg_qtrace_instrument_setup_reg_args(TCGContext *s, InstrumentContext *icontext, int count)
+{
+}
+
 void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
 {
     unsigned idx = 0, ciarg = icontext->ciarg;
+    const int regcount = sizeof(tcg_target_call_iarg_regs)/sizeof(int);
 
-    tcg_qtrace_gen_prologue(s);
+    /// tcg_qtrace_gen_prologue(s);
 
-    /* setup arguments for call one-by-one */
+    /* first 6 integral arguments go into registers. */
+    /* if more than 6 integral parameters, then pass rest on stack */
     for(idx = 0; idx<ciarg; ++idx)
     {
         switch(icontext->iargs[idx])
         {
         case QTRACE_MEMTRACE_VMA:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_vma);
+	     (idx<regcount) ? 
+             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_vma)) :
+	     qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_vma)) ;
              break;
         case QTRACE_MEMTRACE_PMA:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_pma);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_pma)):
+             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_pma));
              break;
         case QTRACE_MEMTRACE_MSIZE:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_msize);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_msize)):
+             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_msize));
              break;
+#if 0
         case QTRACE_MEMTRACE_PREOP_VALUE:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_bval);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, qtrace_bval):
+             qtrace_pop_instrument_into_stk(s, idx, qtrace_bval);
              break;
         case QTRACE_MEMTRACE_PSTOP_VALUE:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_aval);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, qtrace_aval):
+             qtrace_pop_instrument_into_stk(s, idx, qtrace_aval);
              break;
         case QTRACE_PCTRACE_VMA:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_progctr);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, qtrace_progctr):
+             qtrace_pop_instrument_into_stk(s, idx, qtrace_progctr);
 	     break;
         case QTRACE_BRANCH_TARGET:
-	     QTRACE_POP_INSTRUMENT(idx, qtrace_btarget);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, qtrace_btarget):
+             qtrace_pop_instrument_into_stk(s, idx, qtrace_btarget);
 	     break;
 	case QTRACE_PROCESS_UPID:
 	     /* use CR[3] as the unique process ID */
-	     QTRACE_POP_INSTRUMENT(idx, cr[3]);
+	     idx<regcount ? 
+             qtrace_pop_instrument_into_reg(s, idx, cr[3]):
+	     qtrace_pop_instrument_into_stk(s, idx, cr[3]);
 	     break;
+#endif
         default:
              break;
         }
@@ -2693,10 +2714,12 @@ void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
 
     /* lastly, make the call */
     uintptr_t ifun = icontext->ifun;
+    if (!ifun) QTRACE_ERROR("icontext ifun is NULL\n"); 
     assert(ifun);
     tcg_out_calli(s, (uintptr_t)ifun);
 
-    tcg_qtrace_gen_epilogue(s);
+    /* need to fix up stack */
+    tcg_out_addi(s, TCG_REG_ESP, 8*(ciarg-regcount));
 
     /* FIXME-XIN-TONG : what if there are more than 6 arguments */
     assert(ciarg<6);
