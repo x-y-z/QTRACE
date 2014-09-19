@@ -163,6 +163,7 @@ unsigned qtrace_sum_ipoint(InstrumentContext *root);
 unsigned qtrace_has_call(InstrumentContext *root, unsigned flag);
 
 #define QTRACE_ADD_FLAG(s,flag) 	s->qtrace_insnflags|=(flag);
+#define QTRACE_SUB_FLAG(s,flag) 	s->qtrace_insnflags&=~(flag);
 #define QTRACE_ADD_COND_FLAG(s,flag,c) 	{if(c) s->qtrace_insnflags|=(flag);}
 #define QTRACE_RESET_FLAG(s)    	s->qtrace_insnflags=0;
    
