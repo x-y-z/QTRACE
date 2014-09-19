@@ -96,7 +96,7 @@ static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
 }
 
 /// @ qtrace_allocate_icontext_root - allocate a icontext root pointer.
-inline void qtrace_allocate_icontext_root(void) { rootcount++; }
+inline void qtrace_allocate_icontext_root(void) { rootcount++;  assert(rootcount < MAX_ICONTEXT_ROOT); }
 /// @ qtrace_increment_uiid - increment the uiid. one more instruction has passed.
 inline void qtrace_increment_uiid(void) { uiid ++; }
 /// @ qtrace_get_current_icontext_list - return the current icontext head.
@@ -346,58 +346,26 @@ qtrace_invoke_client(print_stats, printstats_list);
 #undef qtrace_invoke_client
 
 
-#if 0
-#define QTRACE_SUM(var)  				\
-unsigned qtrace_sum_##var(void) {			\
-	unsigned ext = 0;				\
-	InstrumentContext *head = ictxhead;		\
-	while(head) 					\
-	{						\
-		ext |= head->#var;			\
-		head = head->next;			\
-	}						\
-	return ext;					\
+#define qtrace_instrumentation_sum(var, x)  			\
+unsigned qtrace_sum_##var(InstrumentContext *root) 		\
+{								\
+	unsigned ext = 0;					\
+	InstrumentContext *head = root;				\
+	while(head) 						\
+	{							\
+		ext |= head->x;					\
+		head = head->next;				\
+	}							\
+	return ext;						\
 } 
 
-QTRACE_SUM(memfext);
-#undef QTRACE_SUM
-#endif
-
-
-unsigned qtrace_sum_memfext(InstrumentContext *root)
-{
-	unsigned memfext = 0;
-	InstrumentContext *head = root;
-	while(head) 
-	{
-		memfext |= ictxhead->memfext; 
-		INEXT(head);
-	}
-	return memfext;
-}
-
-unsigned qtrace_sum_ipoint(InstrumentContext *root)
-{
-	unsigned ipoint = 0;
-	InstrumentContext *head = root;
-	while(head) 
-	{
-		ipoint |= head->ipoint; 
-		INEXT(head);
-	}
-	return ipoint;
-}
+qtrace_instrumentation_sum(ipoint, ipoint);
+qtrace_instrumentation_sum(memfext, memfext);
+#undef qtrace_instrumentation_sum
 
 unsigned qtrace_has_call(InstrumentContext *root, unsigned flag)
 {
     	return qtrace_sum_ipoint(root) & flag;
 }
-
-
-
-
-
-
-
 
 

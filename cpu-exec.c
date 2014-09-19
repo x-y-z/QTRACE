@@ -621,6 +621,14 @@ int cpu_exec(CPUArchState *env)
 
                 spin_lock(&tcg_ctx.tb_ctx.tb_lock);
                 tb = tb_find_fast(env);
+
+#if 0
+                if (tb->pc == 0x3bb2)
+                {
+                    printf("tb size is %d\n", tb->tc_end_ptr - tb->tc_ptr);
+                }
+#endif
+
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
                 if (tcg_ctx.tb_ctx.tb_invalidated_flag) {

@@ -162,7 +162,7 @@ typedef struct TCGPool {
 
 #define TCG_POOL_CHUNK_SIZE 32768
 
-#define TCG_MAX_LABELS 512
+#define TCG_MAX_LABELS 512 
 
 #define TCG_MAX_TEMPS 512
 

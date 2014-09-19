@@ -1,5 +1,5 @@
 /*
- *  QTRACE asynchronous debug tool 
+ *  QTRACE header - mostly macros. 
  *
  *  Copyright (c) 2003-2005 Fabrice Bellard
  *
@@ -124,7 +124,6 @@ void qtrace_invoke_ibasicblock_callback(unsigned arg);
 void qtrace_invoke_client_reset_stats(const char*);
 void qtrace_invoke_client_print_stats(const char*);
 
-
 /// ------------------------------------------------ ///
 /// miscellaneous 
 /// ------------------------------------------------ ///
@@ -187,10 +186,30 @@ unsigned qtrace_has_call(InstrumentContext *root, unsigned flag);
 #define RESET_QTRACE_MEMTRACE_PREOP_VALUE(x)  (x &= (~QTRACE_MEMTRACE_PREOP_VALUE))
 #define RESET_QTRACE_MEMTRACE_PSTOP_VALUE(x)  (x &= (~QTRACE_MEMTRACE_PSTOP_VALUE))
 
-#define QTRACE_MEMTRACE_EXT_ADDRS(x) 	({unsigned i = (x & QTRACE_MEMTRACE_VPMA);  RESET_QTRACE_MEMTRACE_ADDRS(x); i;})
-#define QTRACE_MEMTRACE_EXT_MSIZE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_MSIZE); RESET_QTRACE_MEMTRACE_MSIZE(x); i;})
-#define QTRACE_MEMTRACE_EXT_PREOP_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_PREOP_VALUE); RESET_QTRACE_MEMTRACE_PREOP_VALUE(x); i;})
-#define QTRACE_MEMTRACE_EXT_PSTOP_VALUE(x) 	({unsigned i = (x & QTRACE_MEMTRACE_PSTOP_VALUE); RESET_QTRACE_MEMTRACE_PSTOP_VALUE(x); i;})
+#define QTRACE_MEMTRACE_EXT_ADDRS(x) 						\
+({										\
+	unsigned i = (x & QTRACE_MEMTRACE_VPMA);  				\
+	RESET_QTRACE_MEMTRACE_ADDRS(x); 					\
+	i;									\
+})
+#define QTRACE_MEMTRACE_EXT_MSIZE(x) 						\
+({										\
+	unsigned i = (x & QTRACE_MEMTRACE_MSIZE); 				\
+	RESET_QTRACE_MEMTRACE_MSIZE(x); 					\
+	i;									\
+})
+#define QTRACE_MEMTRACE_EXT_PREOP_VALUE(x) 					\
+({										\
+	unsigned i = (x & QTRACE_MEMTRACE_PREOP_VALUE); 			\
+	RESET_QTRACE_MEMTRACE_PREOP_VALUE(x); 					\
+	i;									\
+})
+#define QTRACE_MEMTRACE_EXT_PSTOP_VALUE(x)					\
+({										\
+	unsigned i = (x & QTRACE_MEMTRACE_PSTOP_VALUE); 			\
+	RESET_QTRACE_MEMTRACE_PSTOP_VALUE(x); 					\
+	i;									\
+})
 
 /* qtrace program counter */
 #define QTRACE_PCTRACE_VMA		(1<<6)

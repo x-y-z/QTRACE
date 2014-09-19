@@ -977,6 +977,7 @@ TranslationBlock *tb_gen_code(CPUArchState *env,
     tb->flags = flags;
     tb->cflags = cflags;
     cpu_gen_code(env, tb, &code_gen_size);
+    tb->tc_end_ptr = code_gen_size + tb->tc_ptr;
     tcg_ctx.code_gen_ptr = (void *)(((uintptr_t)tcg_ctx.code_gen_ptr +
             code_gen_size + CODE_GEN_ALIGN - 1) & ~(CODE_GEN_ALIGN - 1));
 

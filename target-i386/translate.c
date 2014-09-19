@@ -87,6 +87,19 @@ do										\
 { 	/* call instruction instrumentation routine */        			\
    	qtrace_invoke_instruction_callback(s->qtrace_insnflags);	 	\
    	s->qtrace_insncb = true;                            			\
+	if (!s->qtrace_verified) QTRACE_ERROR("instrumentation unverified\n");	\
+} while(0);
+
+#define QTRACE_INSTRUMENT_VERIFIED(s)                          			\
+do										\
+{	/* this instrumentation is verified */					\
+	s->qtrace_verified = true;						\
+} while(0);
+
+#define QTRACE_INSTRUMENT_UNVERIFIED(s)                        			\
+do										\
+{	/* this instrumentation is verified */					\
+	s->qtrace_verified = false;						\
 } while(0);
 
 #define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          			\
@@ -200,6 +213,7 @@ typedef struct DisasContext {
     /* For QTRACE */
     unsigned qtrace_insnflags;
     unsigned qtrace_insncb;
+    unsigned qtrace_verified;
     QTraceFlags *iflags;
 
     unsigned memfext;  /* this is the flag representing the instrumentation by the client */
@@ -5695,19 +5709,46 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /**************************/
         /* push/pop */
     case 0x50 ... 0x57: /* push */
+        /* QTRACE - verified */
+        QTRACE_INSTRUMENT_VERIFIED(s);
+
+        /* QTRACE - this is a load from memory */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+        QTRACE_CLIENT_MODULE(s);
+
         gen_op_mov_TN_reg(OT_LONG, 0, (b & 7) | REX_B(s));
         gen_push_T0(s);
+
+        /* QTRACE - generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
+        /* QTRACE - generate the post-inst instrumentation */
+        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
         break;
     case 0x58 ... 0x5f: /* pop */
+        /* QTRACE - verified */
+        QTRACE_INSTRUMENT_VERIFIED(s);
+
         if (CODE64(s)) {
             ot = dflag ? OT_QUAD : OT_WORD;
         } else {
             ot = dflag + OT_WORD;
         }
+        /* QTRACE - this is a store to memory */
+        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        QTRACE_CLIENT_MODULE(s);
+
         gen_pop_T0(s);
+
+        /* QTRACE - generate the pre-inst instrumentation */
+        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
         /* NOTE: order is important for pop %sp */
         gen_pop_update(s);
         gen_op_mov_reg_T0(ot, (b & 7) | REX_B(s));
+
+        /* QTRACE - generate the post-inst instrumentation */
+        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
         break;
     case 0x60: /* pusha */
         if (CODE64(s))
@@ -5836,6 +5877,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* mov */
     case 0x88:
     case 0x89: /* mov Gv, Ev */
+        /* QTRACE - verified */
+        QTRACE_INSTRUMENT_VERIFIED(s);
+
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5844,7 +5888,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         reg = ((modrm >> 3) & 7) | rex_r;
 
         /* QTRACE - this is a store. */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         /* generate a generic store */
@@ -5858,6 +5902,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0xc6:
     case 0xc7: /* mov Ev, Iv */
+        /* QTRACE - verified */
+        QTRACE_INSTRUMENT_VERIFIED(s);
+
         /* move imm8 to r/m8 */
         /* move imm16 to r/m16. */
         /* move imm32 to r/m32. */
@@ -5897,6 +5944,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* Move r/m16 to r16. */
         /* Move r/m32 to r32. */
         /* Move r/m64 to r64. */
+
+        /* QTRACE - verified */
+        QTRACE_INSTRUMENT_VERIFIED(s);
+        
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5907,9 +5958,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* QTRACE - this is a load from memory */
         QTRACE_ADD_COND_FLAG(s, QTRACE_IS_FETCH, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
-
-        /* QTRACE - program counter instrumentation */
-        /// QTRACE_GENERATE_PC_INSTRUMENT(s->pc_start);
 
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 0);
 
@@ -8716,6 +8764,8 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
     cs_base = tb->cs_base;
     flags = tb->flags;
 
+    // if (pc_start == 0x3bb2)
+
     /* for QTRACE */
     dc->memfext = 0;
 
@@ -8783,7 +8833,7 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
     max_insns = tb->cflags & CF_COUNT_MASK;
     if (max_insns == 0)
         max_insns = CF_COUNT_MASK;
-
+    
     max_insns = 1;
 
     gen_tb_start();
@@ -8826,6 +8876,8 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         /* increment global instruction unqiue id */
         qtrace_increment_uiid();
 
+	QTRACE_INSTRUMENT_UNVERIFIED(dc);
+
         pc_ptr = disas_insn(env, dc, pc_ptr);
 
         /* qtrace_insncb should have been set to true at this point*/
@@ -8844,6 +8896,7 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
             gen_eob(dc);
             break;
         }
+
         /* if too long translation, stop generation too */
         if (tcg_ctx.gen_opc_ptr >= gen_opc_end ||
             (pc_ptr - pc_start) >= (TARGET_PAGE_SIZE - 32) ||

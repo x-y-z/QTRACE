@@ -17,16 +17,18 @@ void InstructionCallBack(unsigned type)
 {
     	if (QTRACE_TEST_FETCH(type))
     	{
-       	Module_INS_InsertCall(10, 
+       	Module_INS_InsertCall(7, 
                              QTRACE_IPOINT_BEFORE, 
                              QTRACE_IFUN, CacheSim, 
-                             QTRACE_MEMTRACE_VMA,
-			     QTRACE_MEMTRACE_MSIZE,
+                             QTRACE_MEMTRACE_VMA, QTRACE_MEMTRACE_MSIZE, QTRACE_MEMTRACE_MSIZE, QTRACE_MEMTRACE_MSIZE);
+
+#if 0
 			     QTRACE_MEMTRACE_MSIZE,
 			     QTRACE_MEMTRACE_MSIZE,
 			     QTRACE_MEMTRACE_MSIZE,
 			     QTRACE_MEMTRACE_MSIZE,
                              QTRACE_MEMTRACE_MSIZE);
+#endif
     	}
 
 #if 0

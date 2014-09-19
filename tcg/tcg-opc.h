@@ -180,8 +180,6 @@ DEF(debug_insn_start, 0, 0, 1, TCG_OPF_NOT_PRESENT)
 #endif
 DEF(exit_tb, 0, 0, 1, TCG_OPF_BB_END)
 DEF(goto_tb, 0, 0, 1, TCG_OPF_BB_END)
-DEF(qtrace_preop_call, 0, 0, 1, 0)
-DEF(qtrace_pstop_call, 0, 0, 1, 0)
 
 #define IMPL_NEW_LDST \
     (TCG_OPF_CALL_CLOBBER | TCG_OPF_SIDE_EFFECTS \
@@ -203,6 +201,9 @@ DEF(qemu_st_i32, 0, 3, 2, IMPL_NEW_LDST)
 DEF(qemu_ld_i64, 2, 2, 2, IMPL_NEW_LDST | TCG_OPF_64BIT)
 DEF(qemu_st_i64, 0, 4, 2, IMPL_NEW_LDST | TCG_OPF_64BIT)
 #endif
+
+DEF(qtrace_preop_call, 0, 0, 1, IMPL_NEW_LDST)
+DEF(qtrace_pstop_call, 0, 0, 1, IMPL_NEW_LDST)
 
 #undef IMPL_NEW_LDST
 

@@ -2607,6 +2607,7 @@ int tcg_gen_code(TCGContext *s, uint8_t *gen_code_buf)
     /* flush instruction cache */
     flush_icache_range((uintptr_t)gen_code_buf, (uintptr_t)s->code_ptr);
 
+
     return s->code_ptr -  gen_code_buf;
 }
 
