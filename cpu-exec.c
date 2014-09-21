@@ -60,10 +60,11 @@ extern DebugChannel *channel;
 static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu) 
 {
     if (channel->_flushcc_) tb_flush(cpu);
-    if (channel->_client_reset_) qtrace_invoke_client_reset_stats(channel->module);
-    if (channel->_client_print_) qtrace_invoke_client_print_stats(channel->module);
-    if (channel->_client_reset_all_) qtrace_invoke_client_reset_stats(0);
-    if (channel->_client_print_all_) qtrace_invoke_client_print_stats(0);
+    if (channel->_client_userd_) qtrace_invoke_client_user_define(channel->mname, channel->fname);
+    if (channel->_client_reset_) qtrace_invoke_client_reset_stats(channel->mname, 0);
+    if (channel->_client_print_) qtrace_invoke_client_print_stats(channel->mname, 0);
+    if (channel->_client_reset_all_) qtrace_invoke_client_reset_stats(0, 0);
+    if (channel->_client_print_all_) qtrace_invoke_client_print_stats(0, 0);
     memset(channel, 0, sizeof(DebugChannel));
 }
 

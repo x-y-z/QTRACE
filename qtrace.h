@@ -108,7 +108,7 @@ void
 /// ------------------------------------------------ ///
 /// instrumentation module metadata 
 /// ------------------------------------------------ ///
-struct genericRtn { void *rtn; char* mname; struct genericRtn *next; };
+struct genericRtn { void *rtn; char *fname; char* mname; struct genericRtn *next; };
 typedef struct genericRtn GenericRtn;
 typedef struct genericRtn InstructionRtn;
 typedef struct genericRtn IBasicBlockRtn;
@@ -121,8 +121,9 @@ typedef struct genericRtn MPrintStatsRtn;
 void qtrace_instrument_setup(const char*);
 void qtrace_invoke_instruction_callback(unsigned arg);
 void qtrace_invoke_ibasicblock_callback(unsigned arg);
-void qtrace_invoke_client_reset_stats(const char*);
-void qtrace_invoke_client_print_stats(const char*);
+void qtrace_invoke_client_reset_stats(const char*, const char*);
+void qtrace_invoke_client_print_stats(const char*, const char*);
+void qtrace_invoke_client_user_define(const char*, const char*);
 
 /// ------------------------------------------------ ///
 /// miscellaneous 

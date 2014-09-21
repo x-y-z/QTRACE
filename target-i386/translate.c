@@ -992,13 +992,30 @@ static void gen_check_io(DisasContext *s, int ot, target_ulong cur_eip,
 
 static inline void gen_movs(DisasContext *s, int ot)
 {
+    /* QTRACE - fetch from memory */
+    QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+    QTRACE_CLIENT_MODULE(s);
+
     gen_string_movl_A0_ESI(s);
     gen_op_ld_T0_A0(ot + s->mem_index, s);
     gen_string_movl_A0_EDI(s);
+
+    /* QTRACE - store to memory */
+    QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+    QTRACE_SUB_FLAG(s, QTRACE_IS_FETCH);
+    QTRACE_CLIENT_MODULE(s);
+    
     gen_op_st_T0_A0(ot + s->mem_index, s);
+
+    /* QTRACE - generate the pre-inst instrumentation */
+    QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
+
     gen_op_movl_T0_Dshift(ot);
     gen_op_add_reg_T0(s->aflag, R_ESI);
     gen_op_add_reg_T0(s->aflag, R_EDI);
+
+    /* QTRACE - generate the post-inst instrumentation */
+    QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
 }
 
 static void gen_op_update1_cc(void)

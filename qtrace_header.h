@@ -23,11 +23,17 @@
 #include <stdio.h>
 #include <stdint.h> 
 
+
+struct userDefineRtn { void *rtn; char *fname;};
+typedef struct userDefineRtn UserDefineRtn;
+
 #define QTRACE_MAX_CALLBACK_NUM 32
-short InstructionCallBackNum = 0, BasicBlockCallBackNum = 0;
+unsigned InstructionCallBackNum = 0, BasicBlockCallBackNum = 0, UserDefineCallBackNum = 0;
 void* ResetStats = NULL, *PrintStats = NULL;
 void* InstructionCallBackArray[QTRACE_MAX_CALLBACK_NUM] = {0};
 void* BasicBlockCallBackArray[QTRACE_MAX_CALLBACK_NUM]  = {0};
+UserDefineRtn* UserDefineCallBackArray[QTRACE_MAX_CALLBACK_NUM] = {0};
+
 
 /* functions to ask QTRACE to insert instrumentation */
 static QTRACE_INSERT_INSTRUMENT Module_INS_InsertCall;
@@ -36,6 +42,13 @@ static QTRACE_INSERT_INSTRUMENT Module_IBB_InsertCall;
 /* AddStatsReset/AddStatsPrint - register stats reset/print */
 void AddStatsReset(void *reset) { ResetStats = reset; }
 void AddStatsPrint(void *print) { PrintStats = print; }
+void AddUserDefine(void *userd, char *fname) 
+{ 
+        UserDefineCallBackArray[UserDefineCallBackNum] = malloc(sizeof(UserDefineRtn));
+	UserDefineCallBackArray[UserDefineCallBackNum]->rtn = userd;
+	UserDefineCallBackArray[UserDefineCallBackNum]->fname = fname;
+        UserDefineCallBackNum++;
+}
 
 /* AddInstructionCallBack - register an instruction callback */
 void AddInstructionCallBack(void *cb)

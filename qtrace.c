@@ -24,6 +24,10 @@
 #include "qtrace.h"
 
 
+struct userDefineRtn { void *rtn; char *fname; };
+typedef struct userDefineRtn UserDefineRtn;
+
+
 /* the instrumentation context of the current instruction */
 static InstrumentContext *ictxhead = NULL;
 
@@ -31,6 +35,7 @@ InstructionRtn* instruction_list = NULL;
 IBasicBlockRtn* ibasicblock_list = NULL;
 MResetStatsRtn* resetstats_list  = NULL;
 MPrintStatsRtn* printstats_list  = NULL;
+MPrintStatsRtn* userdefine_list  = NULL;
 
 /* the current and last unique instruction id */
 unsigned long long uiid = 0;
@@ -46,7 +51,7 @@ static inline void handle_unable_load_module(const char *optarg)
    	QTRACE_EXIT(-1);
 }
 
-static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
+static void add_function_to_list(void *cb, const char *fname, const char *mname, GenericRtn **list)
 {
    	/* it is possible that this module does not define a instruction callback */
    	if (!cb) return;
@@ -66,8 +71,10 @@ static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
 
    	/* register the callback */
    	head->rtn   = cb;
-	head->mname = malloc(strlen(name)+1); 
-	memcpy(head->mname, name, strlen(name)+1);
+	head->mname = malloc(strlen(mname)+1); 
+	memcpy(head->mname, mname, strlen(mname)+1);
+	head->fname = malloc(strlen(fname)+1); 
+	memcpy(head->fname, fname, strlen(fname)+1);
    	head->next  = NULL;
 
 	/* done */
@@ -75,24 +82,29 @@ static void add_function_to_list(void *cb, const char *name, GenericRtn **list)
 }
 
 /// @ register_stats_reset - register a function to resetstats_list list.
+static void register_user_define(UserDefineRtn* rs, const char *mname)  
+{ 
+	add_function_to_list(rs->rtn, rs->fname, mname, &userdefine_list);
+}
+/// @ register_stats_reset - register a function to resetstats_list list.
 static void register_stats_reset(RESET_STATS rs, const char *name)  
 { 
-	add_function_to_list(rs, name, &resetstats_list);
+	add_function_to_list(rs, "ResetStats", name, &resetstats_list);
 }
 /// @ register_stats_print - register a function to printstats_list list.
 static void register_stats_print(PRINT_STATS ps, const char *name)  
 { 
-	add_function_to_list(ps, name, &printstats_list);
+	add_function_to_list(ps, "PrintStats", name, &printstats_list);
 }
 /// @ register_instruction_cb - register a function to instruction_list list.
 static void register_instruction_cb(INSTRUCTION_CALLBACK cb, const char* name)
 {
-	add_function_to_list(cb, name, &instruction_list);
+	add_function_to_list(cb, "InstructionCallBack", name, &instruction_list);
 }
 /// @ register_ibasicblock_cb - register a function to basicblock_list list.
 static void register_ibasicblock_cb(IBASICBLOCK_CALLBACK cb, const char* name)
 {
-	add_function_to_list(cb, name, &ibasicblock_list);
+	add_function_to_list(cb, "BasicBlockCallBack", name, &ibasicblock_list);
 }
 
 /// @ qtrace_allocate_icontext_root - allocate a icontext root pointer.
@@ -242,6 +254,8 @@ void qtrace_instrument_setup(const char *module)
 	const char *InstructionCBNumName   = "InstructionCallBackNum";
 	const char *BasicBlockCBArrayName  = "BasicBlockCallBackArray";
 	const char *BasicBlockCBNumName    = "BasicBlockCallBackNum";
+	const char *UserDefineCBArrayName  = "UserDefineCallBackArray";
+	const char *UserDefineCBNumName    = "UserDefineCallBackNum";
 	const char *InitInsInstrumentName  = "InitializeInstructionInstrument";
 
    	/* load the instrumentation module */
@@ -271,6 +285,16 @@ void qtrace_instrument_setup(const char *module)
 	{
    		register_ibasicblock_cb((IBASICBLOCK_CALLBACK)
 				       BasicBlockCallBackArray[idx], module);
+	}
+
+        /* register all user-define callbacks */
+	void **UserDefineCallBackArray = (void **)
+				        dlsym(handle, UserDefineCBArrayName);
+        unsigned UserDefineCallBackNum = *(unsigned*) 
+                                         dlsym(handle, UserDefineCBNumName);
+	for(idx=0; idx<UserDefineCallBackNum; ++idx) 
+	{
+		register_user_define(UserDefineCallBackArray[idx], module);
 	}
 
 	/* register module reset and print stats */
@@ -311,36 +335,43 @@ qtrace_invoke_callback(ibasicblock, ibasicblock_list);
 
 /// @ qtrace_invoke_client - call client defined reset/print functions.
 #define qtrace_invoke_client(rtnm, flist)			\
-void qtrace_invoke_client_##rtnm(const char* name)		\
+void qtrace_invoke_client_##rtnm(const char *mname, const char* fname)		\
 {								\
 	GenericRtn* curr_rtn = (GenericRtn*) flist;		\
-	bool func_done = false;					\
     	while(curr_rtn)						\
     	{							\
        		assert(curr_rtn->rtn);				\
-		if (name) 					\
+		if (mname)					\
 		{						\
-			if (!strcmp(name, curr_rtn->mname))	\
+		    if (!strcmp(mname, curr_rtn->mname))  	\
+                    {						\
+			if (fname)				\
 			{					\
+			    /* need a mname and fname match */	\
+			    if (!strcmp(fname, curr_rtn->fname))\
+			    {					\
 				((RESET_STATS)curr_rtn->rtn)();	\
-				func_done = true;		\
-				break;				\
+			    	break;				\
+			    }					\
 			} 					\
+			else					\
+			{					\
+			    ((RESET_STATS)curr_rtn->rtn)();   	\
+			    break;				\
+			}					\
+			}					\
 		}						\
 		else 						\
 		{						\
+			/* call this function for all modules */\
 			((RESET_STATS)curr_rtn->rtn)();		\
 		}						\
        		curr_rtn = curr_rtn->next;			\
     	} 							\
-								\
-	if (name && !func_done) 				\
-	{							\
-		QTRACE_ERROR("call %s failed\n", name);		\
-	}							\
 	return;							\
 }							
 
+qtrace_invoke_client(user_define, userdefine_list);
 qtrace_invoke_client(reset_stats, resetstats_list);
 qtrace_invoke_client(print_stats, printstats_list);
 #undef qtrace_invoke_client
