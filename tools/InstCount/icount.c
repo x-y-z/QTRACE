@@ -3,7 +3,7 @@
 
 void CacheSim(void *vma, unsigned msize)
 {
-//    printf("vma is 0x%lx msize is %d\n", (unsigned long)vma, msize);
+    printf("vma is 0x%lx msize is %d\n", (unsigned long)vma, msize);
 }
 
 void JmpSim(void* target, unsigned long upid)

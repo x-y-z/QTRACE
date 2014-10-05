@@ -1951,24 +1951,13 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
 
     InstrumentContext *ictx = NULL;
     switch(opc) {
-    case INDEX_op_qtrace_preop_call:
-        ictx = (InstrumentContext*)args[0];
-        while(ictx) {
-            if (ictx->ipoint & QTRACE_IPOINT_BEFORE) {
-                tcg_qtrace_instrument_preop_call(s, ictx);
-            }
+    case INDEX_op_qtrace_instrumentation:
+         ictx = (InstrumentContext*)args[0];
+         while(ictx) {
+            tcg_qtrace_out_instrumentation_call(s, ictx);
             ictx = ictx->next;
-        }
-        break;
-    case INDEX_op_qtrace_pstop_call:
-        ictx = (InstrumentContext*)args[0];
-        while(ictx) {
-            if (ictx->ipoint & QTRACE_IPOINT_AFTER) {
-                tcg_qtrace_instrument_pstop_call(s, ictx);
-            }
-            ictx = ictx->next;
-        }
-        break;
+         }
+         break;
     case INDEX_op_qtrace_shadow_register:
          /* shadow the register */
          tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, 
@@ -2644,6 +2633,11 @@ void tcg_register_jit(void *buf, size_t buf_size)
 #endif
 
 /* QTRACE - macros to set up arguments for instrumentation calls */
+void tcg_qtrace_out_instrumentation_call(TCGContext *s, InstrumentContext *ictx)
+{
+	tcg_qtrace_instrument_call(s, ictx);
+}
+
 static void qtrace_reg_instrument(TCGContext *s, int rm, int offset)
 {
    tcg_out_modrm_offset(s, OPC_MOVL_GvEv+P_REXW, tcg_target_call_iarg_regs[rm], TCG_AREG0, offset);		
@@ -2743,12 +2737,3 @@ void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
     if (ciarg > regcount) tcg_out_addi(s, TCG_REG_ESP, 8*(ciarg-regcount));
 }
 
-void tcg_qtrace_instrument_preop_call(TCGContext *s, InstrumentContext *ictx)
-{
-	tcg_qtrace_instrument_call(s, ictx);
-}
-
-void tcg_qtrace_instrument_pstop_call(TCGContext *s, InstrumentContext *ictx)
-{
-	tcg_qtrace_instrument_call(s, ictx);
-}

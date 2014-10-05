@@ -769,11 +769,11 @@ TCGv_i64 tcg_const_local_i64(int64_t val);
     ((uintptr_t (*)(void *, void *))tcg_ctx.code_gen_prologue)(env, tb_ptr)
 #endif
 
-/* qtrace */
 void tcg_register_jit(void *buf, size_t buf_size);
+
+/* qtrace */
 void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *c);
-void tcg_qtrace_instrument_preop_call(TCGContext *s, InstrumentContext *c);
-void tcg_qtrace_instrument_pstop_call(TCGContext *s, InstrumentContext *c);
+void tcg_qtrace_out_instrumentation_call(TCGContext *s, InstrumentContext *ictx);
 
 /*
  * Memory helpers that will be used by TCG generated code.

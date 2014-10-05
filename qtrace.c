@@ -57,27 +57,6 @@ qtrace_invoke_callback(instruction, instruction_list);
 qtrace_invoke_callback(ibasicblock, ibasicblock_list);
 #undef qtrace_invoke_callback
 
-#define qtrace_instrumentation_sum(var, x)              \
-unsigned qtrace_sum_##var(InstrumentContext *root)      \
-{                                                       \
-   unsigned ext = 0;                                    \
-   InstrumentContext *head = root;                      \
-   while(head)                                          \
-   {                                                    \
-      ext |= head->x;                                   \
-      head = head->next;                                \
-   }                                                    \
-   return ext;                                          \
-} 
-qtrace_instrumentation_sum(ipoint, ipoint);
-qtrace_instrumentation_sum(memfext, memfext);
-#undef qtrace_instrumentation_sum
-
-unsigned qtrace_has_call(InstrumentContext *root, unsigned flag)
-{
-    return root ? (qtrace_sum_ipoint(root) & flag) : 0;
-}
-
 /// @ qtrace_invoke_client - call client defined reset/print functions.
 void qtrace_invoke_client_from_list(const char *mn, const char* fn, 
                                     GenericRtnContainer *rtn)

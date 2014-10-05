@@ -111,7 +111,7 @@
 #define QTRACE_MEMTRACE_STORE_MSIZE                 (1<<10)     
 #define QTRACE_MEMTRACE_STORE_VALUE                 (1<<11)     
 #define QTRACE_MEMTRACE_STORE_VPMA                  (QTRACE_MEMTRACE_STORE_VMA | QTRACE_MEMTRACE_STORE_PMA)
-/* 2 internal values */
+/* 4 internal values */
 #define QTRACE_MEMTRACE_FETCH_PREOP_VALUE           (1<<12)
 #define QTRACE_MEMTRACE_FETCH_PSTOP_VALUE           (1<<13)
 #define QTRACE_MEMTRACE_STORE_PREOP_VALUE           (1<<14)
@@ -242,11 +242,6 @@ void qtrace_increment_uiid(void);
 void qtrace_icontext_sanity_check(InstrumentContext *);
 /// qtrace_get_current_icontext_list - return the root of the current icontext.
 InstrumentContext* qtrace_get_current_icontext_list(void);
-
-/// sum up all the instrumentations requested by all instrumentation context.
-unsigned qtrace_sum_memfext(InstrumentContext *root);
-unsigned qtrace_sum_ipoint(InstrumentContext *root);
-unsigned qtrace_has_call(InstrumentContext *root, unsigned flag);
 
 #endif /* QTRACE_H */
 

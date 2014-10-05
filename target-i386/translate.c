@@ -108,34 +108,26 @@ while(0);
 
 #define QTRACE_CLIENT_MODULE(s)                                         \
 do                                                                      \
-{    /* call instruction instrumentation routine */                     \
+{  /* call instruction instrumentation parsing routine */               \
    qtrace_invoke_instruction_callback(s->qtrace_insnflags);             \
    s->qtrace_insncb = true;                                             \
    QTRACE_INSTRUMENT_UNVERIFIED(s);                                     \
    qtrace_interpret_instrument_requirements(s);                         \
-} while(0);
+}                                                                       \
+while(0);
 
-#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)                        \
-do                                                                      \
-{      /* generate the pre-insruction instrumentation */                \
-   InstrumentContext *ictx = qtrace_get_current_icontext_list();        \
-   if (qtrace_has_call(ictx, QTRACE_IPOINT_BEFORE))                     \
-   {                                                                    \
-      tcg_gen_op1i(INDEX_op_qtrace_preop_call, (uintptr_t)ictx);        \
-   }                                                                    \
-   ictx = NULL;                                                         \
-} while(0);
+#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)                       
 
-#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)                       \
+#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)                      
+
+#define QTRACE_MATERIALIZE_INSTRUCTION_INSTRUMENT(s)                    \
 do                                                                      \
-{    /* generate the post-insruction instrumentation */                 \
+{  /* generate the pre & post inst  instrumentation */                  \
    InstrumentContext *ictx = qtrace_get_current_icontext_list();        \
-      if (qtrace_has_call(ictx, QTRACE_IPOINT_AFTER))                   \
-   {                                                                    \
-      tcg_gen_op1i(INDEX_op_qtrace_pstop_call, (uintptr_t)ictx);        \
-   }                                                                    \
+   tcg_gen_op1i(INDEX_op_qtrace_instrumentation, (uintptr_t)ictx);      \
    ictx = NULL;                                                         \
-} while(0);
+}                                                                       \
+while(0);
 
 /// ------------------------------------------------------------- ///
 ///             QTRACE PC INSTRUMENT UTILS                        ///
@@ -6087,13 +6079,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 0);
 
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         gen_op_mov_reg_T0(ot, reg);
 
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
+        /* QTRACE - generate the instruction instrumentation */
+        QTRACE_MATERIALIZE_INSTRUCTION_INSTRUMENT(s);
 
         /* QTRACE - verified */
         QTRACE_INSTRUMENT_VERIFIED(s);
