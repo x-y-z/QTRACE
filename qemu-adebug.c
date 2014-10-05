@@ -43,51 +43,64 @@ static inline void disconnect(DebugChannel *channel) { shmdt(channel); }
 /// --------------------------------------------
 /* handle commands */ 
 /// --------------------------------------------
-static const char* flushcc 		= 	"--flushcc";
-static const char* client_userd 	= 	"--client-userd";
-static const char* client_reset 	= 	"--client-reset";
-static const char* client_print 	= 	"--client-print";
-static const char* client_reset_all 	= 	"--client-reset-all";
-static const char* client_print_all 	= 	"--client-print-all";
+static const char* flushcc          =   "--flushcc";
+static const char* client_userd     =   "--client-userd";
+static const char* client_reset     =   "--client-reset";
+static const char* client_print     =   "--client-print";
+static const char* client_reset_all =   "--client-reset-all";
+static const char* client_print_all =   "--client-print-all";
 
-#define QTRACE_HANDLE_CONNECTION(cmd)          			   	\
-static inline void handle_connection_##cmd(DebugChannel *channel,  	\
-					   const char *fname,   	\
-					   const char *mname, 	   	\
-					   bool *valid) 	   	\
-{ 								   	\
-	if (fname) memcpy(channel->fname, fname, strlen(fname));	\
-	if (mname) memcpy(channel->mname, mname, strlen(mname));    	\
-   	channel->_##cmd##_ = 1;   				   	\
-   	QTRACE_WAIT_COMMAND_HANDLED(channel->_##cmd##_);	   	\
-	*valid = true;						   	\
+#define QTRACE_HANDLE_CONNECTION(cmd, var)                          \
+static inline void handle_connection_##cmd(DebugChannel *channel,   \
+                                           const char *fname,       \
+					                       const char *mname,       \
+					                       bool *valid)             \
+{                                                                   \
+	if (fname)                                                      \
+        memcpy(channel->fname, fname, strlen(fname));               \
+	if (mname)                                                      \
+        memcpy(channel->mname, mname, strlen(mname));               \
+   	channel->var = 1;                                               \
+   	QTRACE_WAIT_COMMAND_HANDLED(channel->var);                      \
+	*valid = true;                                                  \
 } 
-QTRACE_HANDLE_CONNECTION(flushcc);
-QTRACE_HANDLE_CONNECTION(client_userd);
-QTRACE_HANDLE_CONNECTION(client_reset);
-QTRACE_HANDLE_CONNECTION(client_print);
-QTRACE_HANDLE_CONNECTION(client_reset_all);
-QTRACE_HANDLE_CONNECTION(client_print_all);
+QTRACE_HANDLE_CONNECTION(flushcc, flushcc);
+QTRACE_HANDLE_CONNECTION(client_userd, client_userd);
+QTRACE_HANDLE_CONNECTION(client_reset, client_reset);
+QTRACE_HANDLE_CONNECTION(client_print, client_print);
+QTRACE_HANDLE_CONNECTION(client_reset_all, client_reset_all);
+QTRACE_HANDLE_CONNECTION(client_print_all, client_print_all);
 #undef QTRACE_HANDLE_CONNECTION
-
 
 static inline void handle_connection_success(int argc, char** argv, DebugChannel *channel) 
 {
   	int i;
   	for (i=1;i<argc;++i)
   	{
-		bool valid_command = false;
-     		if (!strcmp(argv[i], flushcc)) handle_connection_flushcc(channel, 0, 0, &valid_command);
-     		if (!strcmp(argv[i], client_userd)) handle_connection_client_userd(channel, argv[++i], argv[++i], &valid_command);
-     		if (!strcmp(argv[i], client_reset)) handle_connection_client_reset(channel, 0, argv[++i], &valid_command);
-     		if (!strcmp(argv[i], client_print)) handle_connection_client_print(channel, 0, argv[++i], &valid_command);
-     		if (!strcmp(argv[i], client_reset_all)) handle_connection_client_reset_all(channel, 0, 0, &valid_command);
-     		if (!strcmp(argv[i], client_print_all)) handle_connection_client_print_all(channel, 0, 0, &valid_command);
-
+        bool valid_command = false;
+        if (!strcmp(argv[i], flushcc)) handle_connection_flushcc(channel, 0, 0, &valid_command);
+        if (!strcmp(argv[i], client_userd)) handle_connection_client_userd(channel, 
+                                                                           argv[++i], 
+                                                                           argv[++i], 
+                                                                           &valid_command);
+        if (!strcmp(argv[i], client_reset)) handle_connection_client_reset(channel, 
+                                                                           0, 
+                                                                           argv[++i], 
+                                                                           &valid_command);
+        if (!strcmp(argv[i], client_print)) handle_connection_client_print(channel, 
+                                                                           0, 
+                                                                           argv[++i], 
+                                                                           &valid_command);
+        if (!strcmp(argv[i], client_reset_all)) handle_connection_client_reset_all(channel, 
+                                                                                   0, 0, 
+                                                                                   &valid_command);
+        if (!strcmp(argv[i], client_print_all)) handle_connection_client_print_all(channel, 
+                                                                                   0, 0, 
+                                                                                   &valid_command);
 		if (!valid_command) 
 		{
-		        QTRACE_ERROR("invalid command %s\n", argv[i]);
-  			QTRACE_EXIT(-1);
+            QTRACE_ERROR("invalid command %s\n", argv[i]);
+            QTRACE_EXIT(-1);
 		}
   	}
 

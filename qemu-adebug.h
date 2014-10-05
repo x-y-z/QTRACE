@@ -22,17 +22,5 @@
 
 #include "qtrace.h"
 
-#define SHARED_MEM_KEY 154519
-typedef struct {
-  int _client_userd_;
-  int _client_reset_;
-  int _client_print_;
-  int _client_reset_all_;
-  int _client_print_all_;
-  int _flushcc_;
-  char fname[128];
-  char mname[128];
-} DebugChannel;
-
 #endif /* QEMU_ADEBUG_H */
 

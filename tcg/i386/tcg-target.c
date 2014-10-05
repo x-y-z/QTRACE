@@ -1867,6 +1867,7 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     } 
     else 
     {
+       /* we are not tracing any addresses */
        tcg_out_tlb_load(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
     }
 
@@ -1934,22 +1935,31 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
     switch(opc) {
     case INDEX_op_qtrace_preop_call:
         ictx = (InstrumentContext*)args[0];
-	while(ictx) {
-	   if(ictx->ipoint & QTRACE_IPOINT_BEFORE) {
-	      tcg_qtrace_instrument_preop_call(s, ictx);
-	   }
-           ictx = ictx->next;
- 	}
-	break;
+        while(ictx) {
+            if (ictx->ipoint & QTRACE_IPOINT_BEFORE) {
+                tcg_qtrace_instrument_preop_call(s, ictx);
+            }
+            ictx = ictx->next;
+        }
+        break;
     case INDEX_op_qtrace_pstop_call:
         ictx = (InstrumentContext*)args[0];
-	while(ictx) {
-	   if(ictx->ipoint & QTRACE_IPOINT_AFTER) {
-	      tcg_qtrace_instrument_pstop_call(s, ictx);
-	   }
-           ictx = ictx->next;
- 	}
-	break;
+        while(ictx) {
+            if (ictx->ipoint & QTRACE_IPOINT_AFTER) {
+                tcg_qtrace_instrument_pstop_call(s, ictx);
+            }
+            ictx = ictx->next;
+        }
+        break;
+    case INDEX_op_qtrace_shadow_register:
+         /* shadow the register */
+         tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, 
+                                offsetof(CPUArchState, shadowcpu_offset), 
+                                0, MO_Q);
+         tgen_arithr(s, ARITH_ADD + P_REXW, TCG_REG_L0, TCG_AREG0);
+         tcg_out_qemu_ld_direct(s, TCG_REG_L1, TCG_REG_L1, TCG_AREG0, args[0], 0, MO_Q);
+         tcg_out_qemu_st_direct(s, TCG_REG_L1, TCG_REG_L1, TCG_REG_L0, 0, 0, MO_Q);
+         break;
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_EAX, args[0]);
         tcg_out_jmp(s, (uintptr_t)tb_ret_addr);
@@ -2616,12 +2626,12 @@ void tcg_register_jit(void *buf, size_t buf_size)
 #endif
 
 /* QTRACE - macros to set up arguments for instrumentation calls */
-static void qtrace_pop_instrument_into_reg(TCGContext *s, int rm, int offset)
+static void qtrace_reg_instrument(TCGContext *s, int rm, int offset)
 {
    tcg_out_modrm_offset(s, OPC_MOVL_GvEv+P_REXW, tcg_target_call_iarg_regs[rm], TCG_AREG0, offset);		
 }
 
-static void qtrace_pop_instrument_into_stk(TCGContext *s, int rm, int offset)
+static void qtrace_stk_instrument(TCGContext *s, int rm, int offset)
 {
    tcg_out_modrm_offset(s, OPC_MOVL_GvEv+P_REXW, TCG_REG_RAX, TCG_AREG0, offset);		
    tcg_out_push(s, TCG_REG_RAX);             
@@ -2636,54 +2646,46 @@ void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
     /* if more than 6 integral parameters, then pass rest on stack */
     for(idx = 0; idx<ciarg; ++idx)
     {
+        bool use_reg = idx<regcount;
+        unsigned offset  = 0;
         switch(icontext->iargs[idx])
         {
+        case QTRACE_REGTRACE_VALUE:
+             offset = offsetof(CPUArchState, regs[icontext->iargs[++idx]]);
+             break;
         case QTRACE_MEMTRACE_VMA:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_vma)) :
-	     qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_vma)) ;
+             offset = offsetof(CPUArchState, qtrace_vma);
              break;
         case QTRACE_MEMTRACE_PMA:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_pma)):
-             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_pma));
+             offset = offsetof(CPUArchState, qtrace_pma);
              break;
         case QTRACE_MEMTRACE_MSIZE:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_msize)):
-             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_msize));
+             offset = offsetof(CPUArchState, qtrace_msize);
              break;
         case QTRACE_MEMTRACE_PREOP_VALUE:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_bval)):
-             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_bval));
+             offset = offsetof(CPUArchState, qtrace_bval);
              break;
         case QTRACE_MEMTRACE_PSTOP_VALUE:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, qtrace_aval)):
-             qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, qtrace_aval));
+             offset = offsetof(CPUArchState, qtrace_aval);
              break;
-#if 0
         case QTRACE_PCTRACE_VMA:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, qtrace_progctr):
-             qtrace_pop_instrument_into_stk(s, idx, qtrace_progctr);
-	     break;
-        case QTRACE_BRANCH_TARGET:
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, qtrace_btarget):
-             qtrace_pop_instrument_into_stk(s, idx, qtrace_btarget);
-	     break;
-#endif
-	case QTRACE_PROCESS_UPID:
-	     /* use CR[3] as the unique process ID */
-	     idx<regcount ? 
-             qtrace_pop_instrument_into_reg(s, idx, offsetof(CPUArchState, cr[3])):
-	     qtrace_pop_instrument_into_stk(s, idx, offsetof(CPUArchState, cr[3]));
-	     break;
+             offset = offsetof(CPUArchState, qtrace_pctrace);
+             break;
+        case QTRACE_BRANCHTRACE_TARGET:
+             offset = offsetof(CPUArchState, qtrace_btarget);
+             break;
+        case QTRACE_PROCESS_UPID:
+	         /* use CR[3] as the unique process ID */
+             offset = offsetof(CPUArchState, cr[3]);
+	         break;
         default:
              break;
         }
+    
+        /* lastly. generate the instrumentation */
+        use_reg ? 
+        qtrace_reg_instrument(s, idx, offset) :
+        qtrace_stk_instrument(s, idx, offset) ;
     }
 
     /* lastly, make the call */

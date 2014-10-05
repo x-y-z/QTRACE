@@ -22,7 +22,7 @@
 #include "tcg.h"
 #include "qemu/atomic.h"
 #include "sysemu/qtest.h"
-#include "qemu-adebug.h"
+#include "qtrace.h"
 
 extern void * client_reset_stats;
 extern void  * client_print_stats;
@@ -56,17 +56,28 @@ void cpu_resume_from_signal(CPUArchState *env, void *puc)
 
 
 /* asynchronous debug channel */
-extern DebugChannel *channel;
-static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu) 
+static inline void qtrace_cpu_handle_cmds(CPUArchState *cpu)
 {
-    if (channel->_flushcc_) tb_flush(cpu);
-    if (channel->_client_userd_) qtrace_invoke_client_user_define(channel->mname, channel->fname);
-    if (channel->_client_reset_) qtrace_invoke_client_reset_stats(channel->mname, 0);
-    if (channel->_client_print_) qtrace_invoke_client_print_stats(channel->mname, 0);
-    if (channel->_client_reset_all_) qtrace_invoke_client_reset_stats(0, 0);
-    if (channel->_client_print_all_) qtrace_invoke_client_print_stats(0, 0);
+    if (channel->flushcc) tb_flush(cpu);
+    if (channel->client_reset_all) qtrace_invoke_client_from_list(NULL,
+                                                                  ResetStatsNameString,
+                                                                  resetstats_list);
+    if (channel->client_print_all) qtrace_invoke_client_from_list(NULL,
+                                                                  PrintStatsNameString,
+                                                                  printstats_list);
+    if (channel->client_userd) qtrace_invoke_client_from_list(channel->mname,
+                                                              channel->fname,
+                                                              userdefine_list);
+    if (channel->client_reset) qtrace_invoke_client_from_list(channel->mname,
+                                                              ResetStatsNameString,
+                                                              resetstats_list);
+    if (channel->client_print) qtrace_invoke_client_from_list(channel->mname,
+                                                              PrintStatsNameString,
+                                                              printstats_list);
+    /* done. reset the channel */
     memset(channel, 0, sizeof(DebugChannel));
 }
+
 
 /* Execute a TB, and fix up the CPU state afterwards if necessary */
 static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, uint8_t *tb_ptr)

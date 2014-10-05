@@ -82,52 +82,53 @@ static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 /// ------------------------------------------------------------- ///
 ///             QTRACE GENERAL INSTRUMENT UTILS                   ///
 /// ------------------------------------------------------------- ///
-#define QTRACE_INSTRUMENT_VERIFIED(s)                          			\
-do										\
-{	/* this instrumentation is verified */					\
-	s->qtrace_verified = true;						\
+#define QTRACE_INSTRUMENT_VERIFIED(s)                                   \
+do                                                                      \
+{	/* this instrumentation is verified */                              \
+	s->qtrace_verified = true;                                          \
 } while(0);
 
-#define QTRACE_INSTRUMENT_UNVERIFIED(s)                        			\
-do										\
-{	/* this instrumentation is verified */					\
-	s->qtrace_verified = false;						\
+#define QTRACE_INSTRUMENT_UNVERIFIED(s)                                 \
+do                                                                      \
+{	/* this instrumentation is verified */                              \
+	s->qtrace_verified = false;                                         \
 } while(0);
 
-#define QTRACE_INSTRUMENT_CHECK_VERIFIED(s)                    			\
-do										\
-{										\
-	if (!s->qtrace_verified) QTRACE_ERROR("instrumentation unverified\n");	\
+#define QTRACE_INSTRUMENT_CHECK_VERIFIED(s)                             \
+do                                                                      \
+{                                                                       \
+	if (!s->qtrace_verified) QTRACE_ERROR("instrument unverified\n");   \
 } while(0);
 
-#define QTRACE_CLIENT_MODULE(s)                           			\
-do										\
-{ 	/* call instruction instrumentation routine */        			\
-   	qtrace_invoke_instruction_callback(s->qtrace_insnflags);	 	\
-   	s->qtrace_insncb = true;                            			\
-	QTRACE_INSTRUMENT_UNVERIFIED(s);					\
+#define QTRACE_CLIENT_MODULE(s)                                         \
+do                                                                      \
+{ 	/* call instruction instrumentation routine */                      \
+   	qtrace_invoke_instruction_callback(s->qtrace_insnflags);            \
+   	s->qtrace_insncb = true;                                            \
+	QTRACE_INSTRUMENT_UNVERIFIED(s);                                    \
+    qtrace_interpret_instrument_requirements(s);                        \
 } while(0);
 
-#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)          			\
-do 										\
-{   	/* generate the pre-insruction instrumentation */			\
-	InstrumentContext *ictx = qtrace_get_current_icontext_list();		\
-	if (qtrace_has_call(ictx, QTRACE_IPOINT_BEFORE))			\
-	{									\
-		tcg_gen_op1i(INDEX_op_qtrace_preop_call, (uintptr_t)ictx); 	\
-	}									\
-	ictx = NULL;								\
+#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)                        \
+do                                                                      \
+{   	/* generate the pre-insruction instrumentation */               \
+	InstrumentContext *ictx = qtrace_get_current_icontext_list();       \
+	if (qtrace_has_call(ictx, QTRACE_IPOINT_BEFORE))                    \
+	{                                                                   \
+		tcg_gen_op1i(INDEX_op_qtrace_preop_call, (uintptr_t)ictx);      \
+	}                                                                   \
+	ictx = NULL;                                                        \
 } while(0);
 
-#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)         			\
-do										\
-{ 	/* generate the post-insruction instrumentation */ 			\
-	InstrumentContext *ictx = qtrace_get_current_icontext_list();		\
-   	if (qtrace_has_call(ictx, QTRACE_IPOINT_AFTER))				\
-	{									\
-		tcg_gen_op1i(INDEX_op_qtrace_pstop_call, (uintptr_t)ictx);  	\
-	}									\
-	ictx = NULL;								\
+#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)                       \
+do                                                                      \
+{ 	/* generate the post-insruction instrumentation */                  \
+	InstrumentContext *ictx = qtrace_get_current_icontext_list();       \
+   	if (qtrace_has_call(ictx, QTRACE_IPOINT_AFTER))                     \
+	{                                                                   \
+		tcg_gen_op1i(INDEX_op_qtrace_pstop_call, (uintptr_t)ictx);      \
+	}                                                                   \
+	ictx = NULL;                                                        \
 } while(0);
 
 /// ------------------------------------------------------------- ///
@@ -357,6 +358,45 @@ static void set_cc_op(DisasContext *s, CCOp op)
         s->cc_op_dirty = true;
     }
     s->cc_op = op;
+}
+
+static unsigned qtrace_get_register_offset(DisasContext *s, unsigned regnum)
+{
+    switch(regnum)
+    {
+    case regnum >= R_EAX || regnum <= R_R15 :
+        /* general purpose register */
+        return offsetof(CPUX86State, regs[regnum]);
+    default:
+        break;
+    }
+    return 0;
+}
+
+/// @ qtrace_interpret_instrument_requirements - this function sets up
+/// @ the necessary IRs to shadow for pre-instruction instrumentation.
+static void qtrace_interpret_instrument_requirements(DisasContext *s)
+{
+    InstrumentContext *icontext = qtrace_get_current_icontext_list();
+    if (icontext)
+    {
+        unsigned idx = 0, ciarg = icontext->ciarg;
+        unsigned regidx = 0, offset = 0, cssize = 0;
+        for(idx = 0; idx<ciarg; ++idx)
+        {
+            switch(icontext->iargs[idx])
+            {
+            case QTRACE_REGTRACE_VALUE:
+                 regidx = icontext->iargs[++idx];
+                 offset = qtrace_get_register_offset(s, regidx);
+		         tcg_gen_op1i(INDEX_op_qtrace_shadow_register, offset);
+                 break;
+            default:
+                 break;
+            }
+        }
+    }
+    return;
 }
 
 static void gen_update_cc_op(DisasContext *s)
@@ -594,7 +634,7 @@ static inline void qtrace_gen_push_pcfext_imm(target_ulong pc)
     //if (icontext.pcfext) 
     {
        tcg_gen_movi_tl(cpu_tmp0, pc);
-       tcg_gen_st_tl(cpu_tmp0, cpu_env, offsetof(CPUX86State, qtrace_progctr));
+       tcg_gen_st_tl(cpu_tmp0, cpu_env, offsetof(CPUX86State, qtrace_pctrace));
     }
     return;
 }
@@ -993,16 +1033,16 @@ static void gen_check_io(DisasContext *s, int ot, target_ulong cur_eip,
 static inline void gen_movs(DisasContext *s, int ot)
 {
     /* QTRACE - fetch from memory */
-    QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-    QTRACE_CLIENT_MODULE(s);
+    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+    ///QTRACE_CLIENT_MODULE(s);
 
     gen_string_movl_A0_ESI(s);
     gen_op_ld_T0_A0(ot + s->mem_index, s);
     gen_string_movl_A0_EDI(s);
 
     /* QTRACE - store to memory */
-    QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-    QTRACE_SUB_FLAG(s, QTRACE_IS_FETCH);
+    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+    QTRACE_SUB_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
     QTRACE_CLIENT_MODULE(s);
     
     gen_op_st_T0_A0(ot + s->mem_index, s);
@@ -5016,7 +5056,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x30 ... 0x35:
     case 0x38 ... 0x3d:
         {
-            QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_ARITHLOGIC);
             int op, f, val;
             op = (b >> 3) & 7;
             f = (b >> 1) & 3;
@@ -5079,7 +5119,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x81:
     case 0x83:
         {
-            QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_ARITHLOGIC);
             int val;
 
             if ((b & 1) == 0)
@@ -5122,19 +5162,19 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /**************************/
         /* inc, dec, and other misc arith */
     case 0x40 ... 0x47: /* inc Gv */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_ARITHLOGIC);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), 1);
         break;
     case 0x48 ... 0x4f: /* dec Gv */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_ARITHLOGIC);
         ot = dflag ? OT_LONG : OT_WORD;
         gen_inc(s, ot, OR_EAX + (b & 7), -1);
         break;
     case 0xf6: /* GRP3 */
     case 0xf7:
         /* QTRACE - an arithmetic operation */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_ARITHLOGIC);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_ARITHLOGIC);
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -5146,8 +5186,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         op = (modrm >> 3) & 7;
         if (mod != 3) {
             /* QTRACE - fetch from memory */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-            QTRACE_CLIENT_MODULE(s);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+            //QTRACE_CLIENT_MODULE(s);
 
             /* QTRACE - verified */
             QTRACE_INSTRUMENT_VERIFIED(s);
@@ -5182,8 +5222,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
             if (mod != 3) {
                 /* QTRACE - store to memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-                QTRACE_CLIENT_MODULE(s);
+                QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+                //QTRACE_CLIENT_MODULE(s);
       
                 gen_op_st_T0_A0(ot + s->mem_index, s);
 
@@ -5192,7 +5232,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
             } else {
                 /* QTRACE - done parsing instruction property */
-                QTRACE_CLIENT_MODULE(s);
+                //QTRACE_CLIENT_MODULE(s);
 
                 /* QTRACE - generate the pre-inst instrumentation */
                 QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
@@ -5210,9 +5250,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             tcg_gen_neg_tl(cpu_T[0], cpu_T[0]);
             if (mod != 3) {
                 /* QTRACE - store to memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-                QTRACE_SUB_FLAG(s, QTRACE_IS_FETCH);
-                QTRACE_CLIENT_MODULE(s);
+                QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+                QTRACE_SUB_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+                //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_st_T0_A0(ot + s->mem_index, s);
 
@@ -5435,7 +5475,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_inc(s, ot, opreg, -1);
             break;
         case 2: /* call Ev */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_CALL);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_BRANCH & QTRACE_IS_CALL);
             /* XXX: optimize if memory (no 'and' is necessary) */
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
@@ -5488,7 +5528,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             break;
         case 4: /* jmp Ev */
             /* QEMU does not optimize indirect jump */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_BRANCH | QTRACE_IS_INDIRECT);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_BRANCH | QTRACE_IS_INDIRECT);
             ///QTRACE_CLIENT_MODULE(s);
 
             if (s->dflag == 0)
@@ -5508,7 +5548,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_eob(s);
             break;
         case 5: /* ljmp Ev */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_JMP);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
             ///QTRACE_CLIENT_MODULE(s);
 
             gen_op_ld_T1_A0(ot + s->mem_index, s);
@@ -5535,7 +5575,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
             /* QTRACE - generate the post-inst instrumentation */
             QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
             gen_eob(s);
             break;
         case 6: /* push Ev */
@@ -5783,8 +5822,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* push/pop */
     case 0x50 ... 0x57: /* push */
         /* QTRACE - this is a load from memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-        QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_op_mov_TN_reg(OT_LONG, 0, (b & 7) | REX_B(s));
         gen_push_T0(s);
@@ -5805,8 +5844,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             ot = dflag + OT_WORD;
         }
         /* QTRACE - this is a store to memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_pop_T0(s);
 
@@ -5958,7 +5997,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         reg = ((modrm >> 3) & 7) | rex_r;
 
         /* QTRACE - this is a store. */
-        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
+        QTRACE_ADD_COND_INST_TYPE_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         /* generate a generic store */
@@ -5987,7 +6026,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         mod = (modrm >> 6) & 3;
 
         /* QTRACE - this is a load from memory */
-        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
+        QTRACE_ADD_COND_INST_TYPE_FLAG(s, QTRACE_IS_STORE, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         if (mod != 3) {
@@ -6011,7 +6050,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
         /* QTRACE - verified */
         QTRACE_INSTRUMENT_VERIFIED(s);
-
         break;
     case 0x8a:
     case 0x8b: /* mov Ev, Gv */
@@ -6019,6 +6057,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* Move r/m16 to r16. */
         /* Move r/m32 to r32. */
         /* Move r/m64 to r64. */
+        /* XIN */
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -6027,7 +6066,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         reg = ((modrm >> 3) & 7) | rex_r;
 
         /* QTRACE - this is a load from memory */
-        QTRACE_ADD_COND_FLAG(s, QTRACE_IS_FETCH, test_ldst_mem(modrm));
+        QTRACE_ADD_COND_INST_TYPE_FLAG(s, QTRACE_IS_FETCH, test_ldst_mem(modrm));
         QTRACE_CLIENT_MODULE(s);
 
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 0);
@@ -6080,7 +6119,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             ot = OT_WORD;
 
         /* this is a store to memory */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
         ///QTRACE_CLIENT_MODULE(s);
 
         gen_ldst_modrm(env, s, modrm, ot, OR_TMP0, 1);
@@ -6186,14 +6225,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_add_A0_ds_seg(s);
             if ((b & 2) == 0) {
                 /* this is a load from memory */
-                //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
                 //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_ld_T0_A0(ot + s->mem_index, s);
                 gen_op_mov_reg_T0(ot, R_EAX);
             } else {
                 /* this is a store from memory */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+                QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
                 ///QTRACE_CLIENT_MODULE(s);
 
                 gen_op_mov_TN_reg(ot, 0, R_EAX);
@@ -6224,7 +6263,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_add_A0_ds_seg(s);
 
         /* this is a store from memory */
-        //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
         //QTRACE_CLIENT_MODULE(s);
 
         gen_op_ldu_T0_A0(OT_BYTE + s->mem_index, s);
@@ -6286,8 +6325,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_helper_lock();
 
             /* this is a load and store from memory */
-            //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-            //QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+            //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+            //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
             //QTRACE_CLIENT_MODULE(s);
 
             gen_op_ld_T1_A0(ot + s->mem_index, s);
@@ -6322,7 +6361,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             goto illegal_op;
 
         /* this is a load from memory */
-        //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
         //QTRACE_CLIENT_MODULE(s);
 
         gen_lea_modrm(env, s, modrm, &reg_addr, &offset_addr);
@@ -6449,7 +6488,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             case 0x30 ... 0x37: /* fixxx */
                 {
                     /* this is a load from memory */
-                    //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                    //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
                     //QTRACE_CLIENT_MODULE(s);
 
                     int op1;
@@ -6495,7 +6534,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 switch(op & 7) {
                 case 0:
                     /* this is a load from memory */
-                    //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                    //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
                     //QTRACE_CLIENT_MODULE(s);
                     switch(op >> 4) {
                     case 0:
@@ -6524,7 +6563,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 case 1:
                     /* XXX: the corresponding CPUID bit must be tested ! */
                     /* this is a store to memory */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
                    /// QTRACE_CLIENT_MODULE(s);
                     switch(op >> 4) {
                     case 1:
@@ -6548,7 +6587,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     break;
                 default:
                     /* this is a store to memory */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
                     /// QTRACE_CLIENT_MODULE(s);
                     switch(op >> 4) {
                     case 0:
@@ -6585,7 +6624,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 break;
             case 0x0d: /* fldcw mem */
                 /* this is a load from memory */
-                //QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
+                //QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
                 //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_ld_T0_A0(OT_WORD + s->mem_index, s);
@@ -7166,9 +7205,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /************************/
         /* control */
     case 0xc2: /* ret im */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_RETURN);
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_RETURN);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_CLIENT_MODULE(s);
 
         val = cpu_ldsw_code(env, s->pc);
         s->pc += 2;
@@ -7193,9 +7232,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         QTRACE_INSTRUMENT_VERIFIED(s);
         break;
     case 0xc3: /* ret */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_RETURN);
-        QTRACE_ADD_FLAG(s, QTRACE_IS_FETCH);
-        QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_RETURN);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_FETCH);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_pop_T0(s);
 
@@ -7274,9 +7313,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0xe8: /* call im */
         {
             /* QTRACE - call and store */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
-            QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-            QTRACE_CLIENT_MODULE(s);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_CALL);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+            //QTRACE_CLIENT_MODULE(s);
             if (dflag)
                 tval = (int32_t)insn_get(env, s, OT_LONG);
             else
@@ -7308,7 +7347,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x9a: /* lcall im */
         {
-            QTRACE_ADD_FLAG(s, QTRACE_IS_CALL);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_CALL);
             ///QTRACE_CLIENT_MODULE(s);
             unsigned int selector, offset;
 
@@ -7329,7 +7368,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         goto do_lcall;
     case 0xe9: /* jmp im */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
         ///QTRACE_CLIENT_MODULE(s);
 
         if (dflag)
@@ -7360,7 +7399,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         goto do_ljmp;
     case 0xeb: /* jmp Jb */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
         ///QTRACE_CLIENT_MODULE(s);
 
         tval = (int8_t)insn_get(env, s, OT_BYTE);
@@ -7372,13 +7411,13 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_jmp(s, tval);
         break;
     case 0x70 ... 0x7f: /* jcc Jb */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
         //QTRACE_CLIENT_MODULE(s);
 
         tval = (int8_t)insn_get(env, s, OT_BYTE);
         goto do_jcc;
     case 0x180 ... 0x18f: /* jcc Jv */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
         //QTRACE_CLIENT_MODULE(s);
         if (dflag) {
             tval = (int32_t)insn_get(env, s, OT_LONG);
@@ -7414,8 +7453,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* flags */
     case 0x9c: /* pushf */
         /* QTRACE - is store */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_STORE);
-        QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_STORE);
+        //QTRACE_CLIENT_MODULE(s);
 
         gen_svm_check_intercept(s, pc_start, SVM_EXIT_PUSHF);
         if (s->vm86 && s->iopl != 3) {
@@ -7722,7 +7761,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /************************/
         /* misc */
     case 0x90: /* nop */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_NOP);
         ///QTRACE_CLIENT_MODULE(s);
         /* XXX: correct lock test for all insn */
         if (prefixes & PREFIX_LOCK) {
@@ -7919,7 +7958,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x131: /* rdtsc */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_RDTSC);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_RDTSC);
         ///QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
@@ -7937,7 +7976,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_helper_rdpmc(cpu_env);
         break;
     case 0x134: /* sysenter */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSENTER);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_SYSENTER);
         ///QTRACE_CLIENT_MODULE(s);
         /* For Intel SYSENTER is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
@@ -7952,7 +7991,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x135: /* sysexit */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSEXIT);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_SYSEXIT);
         ///QTRACE_CLIENT_MODULE(s);
         /* For Intel SYSEXIT is valid on 64-bit */
         if (CODE64(s) && env->cpuid_vendor1 != CPUID_VENDOR_INTEL_1)
@@ -7969,7 +8008,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 #ifdef TARGET_X86_64
     case 0x105: /* syscall */
         /* XXX: is it usable in real mode ? */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSCALL);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_SYSCALL);
         ///QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
@@ -7977,7 +8016,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_eob(s);
         break;
     case 0x107: /* sysret */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_SYSRET);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_SYSRET);
         ///QTRACE_CLIENT_MODULE(s);
         if (!s->pe) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
@@ -7994,14 +8033,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
 #endif
     case 0x1a2: /* cpuid */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_CPUID);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_CPUID);
         ///QTRACE_CLIENT_MODULE(s);
         gen_update_cc_op(s);
         gen_jmp_im(pc_start - s->cs_base);
         gen_helper_cpuid(cpu_env);
         break;
     case 0xf4: /* hlt */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_HLT);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_HLT);
         //QTRACE_CLIENT_MODULE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
@@ -8103,7 +8142,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             if (mod == 3) {
                 switch (rm) {
                 case 0: /* monitor */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_MONITOR);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_MONITOR);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
@@ -8124,7 +8163,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     gen_helper_monitor(cpu_env, cpu_A0);
                     break;
                 case 1: /* mwait */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_MWAIT);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_MWAIT);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->cpuid_ext_features & CPUID_EXT_MONITOR) ||
                         s->cpl != 0)
@@ -8174,7 +8213,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_jmp_im(pc_start - s->cs_base);
                 switch(rm) {
                 case 0: /* VMRUN */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_VIRT);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
@@ -8189,14 +8228,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     }
                     break;
                 case 1: /* VMMCALL */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_VIRT);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK))
                         goto illegal_op;
                     gen_helper_vmmcall(cpu_env);
                     break;
                 case 2: /* VMLOAD */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_VIRT);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
@@ -8208,7 +8247,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     }
                     break;
                 case 3: /* VMSAVE */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_VIRT);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_VIRT);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
@@ -8249,7 +8288,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     gen_helper_skinit(cpu_env);
                     break;
                 case 7: /* INVLPGA */
-                    QTRACE_ADD_FLAG(s, QTRACE_IS_INVLPGA);
+                    QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_INVLPGA);
                     ///QTRACE_CLIENT_MODULE(s);
                     if (!(s->flags & HF_SVME_MASK) || !s->pe)
                         goto illegal_op;
@@ -8362,7 +8401,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0x108: /* invd */
     case 0x109: /* wbinvd */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_INVD);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_INVD);
         ////QTRACE_CLIENT_MODULE(s);
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
@@ -8475,7 +8514,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x118:
-        QTRACE_ADD_FLAG(s, QTRACE_IS_PREFETCH);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_PREFETCH);
         ////QTRACE_CLIENT_MODULE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         mod = (modrm >> 6) & 3;
@@ -8496,7 +8535,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         break;
     case 0x119 ... 0x11f: /* nop (multi byte) */
-        QTRACE_ADD_FLAG(s, QTRACE_IS_NOP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_NOP);
         ///QTRACE_CLIENT_MODULE(s);
         modrm = cpu_ldub_code(env, s->pc++);
         gen_nop_modrm(env, s, modrm);
@@ -8656,7 +8695,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             break;
         case 5: /* lfence */
         case 6: /* mfence */
-            QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_MEMFENCE);
             ///QTRACE_CLIENT_MODULE(s);
             if ((modrm & 0xc7) != 0xc0 || !(s->cpuid_features & CPUID_SSE2))
                 goto illegal_op;
@@ -8665,13 +8704,13 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             if ((modrm & 0xc7) == 0xc0) {
                 /* sfence */
                 /* XXX: also check for cpuid_ext2_features & CPUID_EXT2_EMMX */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_MEMFENCE);
+                QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_MEMFENCE);
                 ///QTRACE_CLIENT_MODULE(s);
                 if (!(s->cpuid_features & CPUID_SSE))
                     goto illegal_op;
             } else {
                 /* clflush */
-                QTRACE_ADD_FLAG(s, QTRACE_IS_CLFLUSH);
+                QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_CLFLUSH);
                 ///QTRACE_CLIENT_MODULE(s);
                 if (!(s->cpuid_features & CPUID_CLFLUSH))
                     goto illegal_op;
@@ -8950,14 +8989,14 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
             gen_io_start();
 
-	/* QTRACE - reset all flags */
-        QTRACE_RESET_FLAG(dc);
+        /* QTRACE - reset all flags */
+        QTRACE_RESET_INST_TYPE_FLAG(dc);
 
         /* QTRACE. is this a user or kernel level instruction */
         is_kern = (dc->cpl == 0);
         is_user = (dc->cpl >  0);
-        if (is_kern) QTRACE_ADD_FLAG(dc, QTRACE_IS_KERN);
-        if (is_user) QTRACE_ADD_FLAG(dc, QTRACE_IS_USER);
+        if (is_kern) QTRACE_ADD_INST_TYPE_FLAG(dc, QTRACE_IS_KERN);
+        if (is_user) QTRACE_ADD_INST_TYPE_FLAG(dc, QTRACE_IS_USER);
 
         dc->qtrace_insncb = false;
 

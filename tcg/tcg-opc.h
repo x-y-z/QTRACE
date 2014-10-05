@@ -204,6 +204,7 @@ DEF(qemu_st_i64, 0, 4, 2, IMPL_NEW_LDST | TCG_OPF_64BIT)
 
 DEF(qtrace_preop_call, 0, 0, 1, IMPL_NEW_LDST)
 DEF(qtrace_pstop_call, 0, 0, 1, IMPL_NEW_LDST)
+DEF(qtrace_shadow_register, 0, 0, 1, IMPL_NEW_LDST)
 
 #undef IMPL_NEW_LDST
 
