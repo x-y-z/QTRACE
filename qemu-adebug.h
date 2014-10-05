@@ -20,7 +20,7 @@
 #ifndef QEMU_ADEBUG_H
 #define QEMU_ADEBUG_H
 
-#include "qtrace.h"
+#include "qtrace-common.h"
 
 #endif /* QEMU_ADEBUG_H */
 

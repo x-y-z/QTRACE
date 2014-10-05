@@ -19,9 +19,9 @@
 #ifndef CPU_I386_H
 #define CPU_I386_H
 
-#include "reg.h"
 #include "config.h"
 #include "qemu-common.h"
+#include "qtrace-target.h"
 
 #ifdef TARGET_X86_64
 #define TARGET_LONG_BITS 64
@@ -738,7 +738,6 @@ typedef struct {
 #define MAX_FIXED_COUNTERS 3
 #define MAX_GP_COUNTERS    (MSR_IA32_PERF_STATUS - MSR_P6_EVNTSEL0)
 
-#define NB_MMU_MODES 3
 
 typedef enum TPRAccess {
     TPR_ACCESS_READ,
@@ -911,17 +910,13 @@ typedef struct CPUX86State {
 
     TPRAccess tpr_access_type;
 
-    /* For QTRACE */
-    target_ulong qtrace_msize;   /* memory size */
-    target_ulong qtrace_vma;     /* virtual memory address */
-    target_ulong qtrace_pma;     /* physcal memory address */
-    target_ulong qtrace_bval;    /* memory before value */
-    target_ulong qtrace_aval;    /* memory before value */
-    target_ulong qtrace_pctrace; /* memory before value */
-    target_ulong qtrace_btarget; /* branch target */
-
+    /* QTRACE - register shadowing */
     struct CPUX86State *shadowcpu;
     uint64_t shadowcpu_offset;
+
+    /* QTRACE - memory shadowing */
+    CPUFetchStoreShadow fetch_shadow;
+    CPUFetchStoreShadow store_shadow; 
 } CPUX86State;
 
 #include "cpu-qom.h"

@@ -30,6 +30,7 @@
 #include <zlib.h>
 #include "qemu/bitmap.h"
 #include "qemu-adebug.h"
+#include "qtrace.h"
 
 /* Needed early for CONFIG_BSD etc. */
 #include "config-host.h"

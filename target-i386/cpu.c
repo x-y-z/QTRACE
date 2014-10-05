@@ -2700,7 +2700,6 @@ static void x86_cpu_initfn(Object *obj)
     /* qtrace - every cpu keeps a shadow cpu */
     env->shadowcpu = g_malloc(sizeof(CPUX86State));
     env->shadowcpu_offset = (intptr_t)env->shadowcpu - (intptr_t)env;
-    printf("env->regs[0] at 0x%lx env->shadowcpu->regs[0] at 0x%lx %d\n", (long unsigned) &env->regs[0], (long unsigned) &env->shadowcpu->regs[0], env->shadowcpu_offset);
 }
 
 static int64_t x86_cpu_get_arch_id(CPUState *cs)

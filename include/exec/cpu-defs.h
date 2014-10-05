@@ -142,6 +142,14 @@ typedef struct CPUWatchpoint {
     QTAILQ_ENTRY(CPUWatchpoint) entry;
 } CPUWatchpoint;
 
+typedef struct CPUFetchStoreShadow {
+    target_ulong vaddr;
+    target_ulong paddr;
+    target_ulong bsize;
+    target_ulong prevalue;
+    target_ulong pstvalue;
+} CPUFetchStoreShadow;
+
 #define CPU_TEMP_BUF_NLONGS 128
 #define CPU_COMMON                                                      \
     /* soft mmu support */                                              \

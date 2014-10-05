@@ -26,8 +26,8 @@
 #define TCG_H
 
 #include "qemu-common.h"
-
 #include "tcg-target.h"
+#include "qtrace-common.h"
 
 /* Default target word size to pointer size.  */
 #ifndef TCG_TARGET_REG_BITS
@@ -769,8 +769,7 @@ TCGv_i64 tcg_const_local_i64(int64_t val);
     ((uintptr_t (*)(void *, void *))tcg_ctx.code_gen_prologue)(env, tb_ptr)
 #endif
 
-extern InstrumentContext icontext;
-
+/* qtrace */
 void tcg_register_jit(void *buf, size_t buf_size);
 void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *c);
 void tcg_qtrace_instrument_preop_call(TCGContext *s, InstrumentContext *c);

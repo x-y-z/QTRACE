@@ -23,6 +23,7 @@
  */
 
 #include "tcg-be-ldst.h"
+#include "qtrace.h"
 
 #ifndef NDEBUG
 static const char * const tcg_target_reg_names[TCG_TARGET_NB_REGS] = {
@@ -1168,7 +1169,11 @@ static inline void tcg_out_tlb_load_trace_vma(TCGContext *s, TCGReg addrlo, TCGR
     tcg_out_mov(s, ttype, r1, addrlo);
 
     /* save the virtual address in the instrumentation area */
-    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
+    bool isfetch = (which ==  offsetof(CPUTLBEntry, addr_read)); 
+    unsigned offset = isfetch ? 
+                      offsetof(CPUArchState, fetch_shadow.vaddr) : 
+                      offsetof(CPUArchState, store_shadow.vaddr);
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offset);
 
     tcg_out_shifti(s, SHIFT_SHR + hrexw, r0,
                    TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS);
@@ -1287,7 +1292,12 @@ static inline void tcg_out_tlb_load_trace_pma(TCGContext *s, TCGReg addrlo, TCGR
     tcg_out_mov(s, htype, r0, r1);
     /* FIX-ME-XIN-TONG */
     tcg_out_addi(s, r0, 10000);
-    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_pma));
+
+    bool isfetch = (which ==  offsetof(CPUTLBEntry, addr_read)); 
+    unsigned offset = isfetch ? 
+                      offsetof(CPUArchState, fetch_shadow.paddr): 
+                      offsetof(CPUArchState, store_shadow.paddr);
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r0, TCG_AREG0, offset);
 }
 
 
@@ -1316,7 +1326,11 @@ static inline void tcg_out_tlb_load_trace_vpma(TCGContext *s, TCGReg addrlo, TCG
     tcg_out_mov(s, ttype, r1, addrlo);
 
     /* save the virtual address in the instrumentation area */
-    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_vma));
+    bool isfetch = (which ==  offsetof(CPUTLBEntry, addr_read)); 
+    unsigned offset = isfetch ? 
+                      offsetof(CPUArchState, fetch_shadow.vaddr): 
+                      offsetof(CPUArchState, store_shadow.vaddr);
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+trexw, r0, TCG_AREG0, offset);
 
     tcg_out_shifti(s, SHIFT_SHR + hrexw, r0,
                    TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS);
@@ -1367,7 +1381,11 @@ static inline void tcg_out_tlb_load_trace_vpma(TCGContext *s, TCGReg addrlo, TCG
     tcg_out_mov(s, htype, r0, r1);
     /* FIX-ME-XIN-TONG */
     tcg_out_addi(s, r0, 10000);
-    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r0, TCG_AREG0, offsetof(CPUArchState, qtrace_pma));
+
+    offset = isfetch ? 
+             offsetof(CPUArchState, fetch_shadow.paddr): 
+             offsetof(CPUArchState, store_shadow.paddr);
+    tcg_out_modrm_offset(s, OPC_MOVL_EvGv+hrexw, r0, TCG_AREG0, offset);
 }
 
 /*
@@ -1675,23 +1693,23 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     s_bits = opc & MO_SIZE;
 
     /* record the size */
-    if (QTRACE_MEMTRACE_EXT_MSIZE(mem_trace)) 
+    if (QTRACE_MEMTRACE_FETCH_EXT_MSIZE(mem_trace)) 
     {
        tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_msize));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, fetch_shadow.bsize));
     }
 
-    if ((maddrs = (QTRACE_MEMTRACE_EXT_ADDRS(mem_trace))))
+    if ((maddrs = (QTRACE_MEMTRACE_FETCH_EXT_ADDRS(mem_trace))))
     {
        switch(maddrs)
        {
-       case QTRACE_MEMTRACE_VMA:
+       case QTRACE_MEMTRACE_FETCH_VMA:
             tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
             break;
-       case QTRACE_MEMTRACE_PMA:
+       case QTRACE_MEMTRACE_FETCH_PMA:
             tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
             break;
-       case QTRACE_MEMTRACE_VPMA:
+       case QTRACE_MEMTRACE_FETCH_VPMA:
             tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_read));
             break;
        default:
@@ -1708,14 +1726,14 @@ static void tcg_out_qemu_ld(TCGContext *s, const TCGArg *args, bool is64)
     tcg_out_qemu_ld_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* Record the loaded value */
-    if (QTRACE_MEMTRACE_EXT_PREOP_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_FETCH_EXT_PREOP_VALUE(mem_trace)) 
     {
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_bval));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, fetch_shadow.prevalue));
     }
 
-    if (QTRACE_MEMTRACE_EXT_PSTOP_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_FETCH_EXT_PSTOP_VALUE(mem_trace)) 
     {
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, qtrace_aval));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, datalo, TCG_AREG0, offsetof(CPUArchState, fetch_shadow.pstvalue));
     }
 
     /* Record the current context of a load into ldst label */
@@ -1840,24 +1858,24 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     s_bits = opc & MO_SIZE;
 
     /* record the size */
-    if (QTRACE_MEMTRACE_EXT_MSIZE(mem_trace)) 
+    if (QTRACE_MEMTRACE_STORE_EXT_MSIZE(mem_trace)) 
     {
        tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_L0, (1<<s_bits));
-       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_msize));
+       tcg_out_modrm_offset(s, OPC_MOVL_EvGv+P_REXW, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, store_shadow.bsize));
     }
 
     /* record the memory address */
-    if ((maddrs=QTRACE_MEMTRACE_EXT_ADDRS(mem_trace)))
+    if ((maddrs=QTRACE_MEMTRACE_STORE_EXT_ADDRS(mem_trace)))
     {
        switch(maddrs)
        {
-       case QTRACE_MEMTRACE_VMA:
+       case QTRACE_MEMTRACE_STORE_VMA:
             tcg_out_tlb_load_trace_vma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
             break;
-       case QTRACE_MEMTRACE_PMA:
+       case QTRACE_MEMTRACE_STORE_PMA:
             tcg_out_tlb_load_trace_pma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
             break;
-       case QTRACE_MEMTRACE_VPMA:
+       case QTRACE_MEMTRACE_STORE_VPMA:
             tcg_out_tlb_load_trace_vpma(s, addrlo, addrhi, mem_index, s_bits, label_ptr, offsetof(CPUTLBEntry, addr_write));
             break;
        default:
@@ -1872,19 +1890,19 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is64)
     }
 
     /* record the value before store */
-    if (QTRACE_MEMTRACE_EXT_PREOP_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_STORE_EXT_PREOP_VALUE(mem_trace)) 
     {
        tcg_out_qemu_ld_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_REG_L1, 0, 0, opc);
-       tcg_out_qemu_st_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, qtrace_bval), 0, opc);
+       tcg_out_qemu_st_direct(s, TCG_REG_L0, TCG_REG_L0, TCG_AREG0, offsetof(CPUArchState, store_shadow.prevalue), 0, opc);
     }
 
     /* TLB Hit.  */
     tcg_out_qemu_st_direct(s, datalo, datahi, TCG_REG_L1, 0, 0, opc);
 
     /* record the value after store */
-    if (QTRACE_MEMTRACE_EXT_PSTOP_VALUE(mem_trace)) 
+    if (QTRACE_MEMTRACE_STORE_EXT_PSTOP_VALUE(mem_trace)) 
     { 
-       tcg_out_qemu_st_direct(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, qtrace_aval), 0, opc);
+       tcg_out_qemu_st_direct(s, datalo, datahi, TCG_AREG0, offsetof(CPUArchState, store_shadow.pstvalue), 0, opc);
     }
 
     /* Record the current context of a store into ldst label */
@@ -2650,34 +2668,61 @@ void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *icontext)
         unsigned offset  = 0;
         switch(icontext->iargs[idx])
         {
+        /// ---------------------------------- ///
+        /// register trace  
+        /// ---------------------------------- ///
         case QTRACE_REGTRACE_VALUE:
              offset = offsetof(CPUArchState, regs[icontext->iargs[++idx]]);
              break;
-        case QTRACE_MEMTRACE_VMA:
-             offset = offsetof(CPUArchState, qtrace_vma);
+        /// ---------------------------------- ///
+        /// memory trace  
+        /// ---------------------------------- ///
+        case QTRACE_MEMTRACE_FETCH_VMA:
+             offset = offsetof(CPUArchState, fetch_shadow.vaddr);
              break;
-        case QTRACE_MEMTRACE_PMA:
-             offset = offsetof(CPUArchState, qtrace_pma);
+        case QTRACE_MEMTRACE_FETCH_PMA:
+             offset = offsetof(CPUArchState, fetch_shadow.paddr);
              break;
-        case QTRACE_MEMTRACE_MSIZE:
-             offset = offsetof(CPUArchState, qtrace_msize);
+        case QTRACE_MEMTRACE_FETCH_MSIZE:
+             offset = offsetof(CPUArchState, fetch_shadow.bsize);
              break;
-        case QTRACE_MEMTRACE_PREOP_VALUE:
-             offset = offsetof(CPUArchState, qtrace_bval);
+        case QTRACE_MEMTRACE_FETCH_PREOP_VALUE:
+             offset = offsetof(CPUArchState, fetch_shadow.prevalue);
              break;
-        case QTRACE_MEMTRACE_PSTOP_VALUE:
-             offset = offsetof(CPUArchState, qtrace_aval);
+        case QTRACE_MEMTRACE_FETCH_PSTOP_VALUE:
+             offset = offsetof(CPUArchState, fetch_shadow.pstvalue);
              break;
+        case QTRACE_MEMTRACE_STORE_VMA:
+             offset = offsetof(CPUArchState, store_shadow.vaddr);
+             break;
+        case QTRACE_MEMTRACE_STORE_PMA:
+             offset = offsetof(CPUArchState, store_shadow.paddr);
+             break;
+        case QTRACE_MEMTRACE_STORE_MSIZE:
+             offset = offsetof(CPUArchState, store_shadow.bsize);
+             break;
+        case QTRACE_MEMTRACE_STORE_PREOP_VALUE:
+             offset = offsetof(CPUArchState, store_shadow.prevalue);
+             break;
+        case QTRACE_MEMTRACE_STORE_PSTOP_VALUE:
+             offset = offsetof(CPUArchState, store_shadow.pstvalue);
+             break;
+        /// ---------------------------------- ///
+        /// branch trace  
+        /// ---------------------------------- ///
         case QTRACE_PCTRACE_VMA:
-             offset = offsetof(CPUArchState, qtrace_pctrace);
+             offset = 0;
              break;
         case QTRACE_BRANCHTRACE_TARGET:
-             offset = offsetof(CPUArchState, qtrace_btarget);
+             offset = 0;
              break;
+        /// ---------------------------------- ///
+        /// process ID trace.  
+        /// ---------------------------------- ///
         case QTRACE_PROCESS_UPID:
-	         /* use CR[3] as the unique process ID */
+	          /* use CR[3] as the unique process ID */
              offset = offsetof(CPUArchState, cr[3]);
-	         break;
+	          break;
         default:
              break;
         }
