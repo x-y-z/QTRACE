@@ -463,6 +463,9 @@ struct TCGContext {
     uint16_t *tb_next_offset;
     uint16_t *tb_jmp_offset; /* != NULL if USE_DIRECT_JUMP */
 
+    /* qtrace */
+    uintptr_t *qtrace_next_offset;
+
     /* liveness analysis */
     uint16_t *op_dead_args; /* for each operation, each bit tells if the
                                corresponding argument is dead */
@@ -773,7 +776,7 @@ void tcg_register_jit(void *buf, size_t buf_size);
 
 /* qtrace */
 void tcg_qtrace_instrument_call(TCGContext *s, InstrumentContext *c);
-void tcg_qtrace_out_instrumentation_call(TCGContext *s, InstrumentContext *ictx);
+int tcg_qtrace_out_instrumentation_call(TCGContext *s, InstrumentContext *ictx, unsigned select);
 
 /*
  * Memory helpers that will be used by TCG generated code.

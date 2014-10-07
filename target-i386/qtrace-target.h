@@ -22,6 +22,8 @@
 /// ------------------------------
 /// register 
 /// ------------------------------
+
+/* general purpose registers. */
 #define R_EAX 0
 #define R_ECX 1
 #define R_EDX 2
@@ -38,23 +40,42 @@
 #define R_R13 13
 #define R_R14 14
 #define R_R15 15
+#define R_RIP 16
 
-/* qtrace regtrace support */
 #define QTRACE_X86_RAX R_EAX
 #define QTRACE_X86_RCX R_ECX
 #define QTRACE_X86_RDX R_EDX
 #define QTRACE_X86_RBX R_EBX
 #define QTRACE_X86_RSP R_ESP
+#define QTRACE_X86_RBP R_EBP
 #define QTRACE_X86_RSI R_ESI
 #define QTRACE_X86_RDI R_EDI
 #define QTRACE_X86_R8  R_R8
-#define QTRACE_X86_R9  R_R8
+#define QTRACE_X86_R9  R_R9
 #define QTRACE_X86_R10 R_R10
 #define QTRACE_X86_R11 R_R11
 #define QTRACE_X86_R12 R_R12
 #define QTRACE_X86_R13 R_R13
 #define QTRACE_X86_R14 R_R14
 #define QTRACE_X86_R15 R_R15
+#define QTRACE_X86_RIP R_RIP
+
+/* control register. */
+#define R_CR0 17
+#define R_CR1 18
+#define R_CR2 19
+#define R_CR3 20 
+#define R_CR4 21
+
+#define QTRACE_X86_CR0 R_CR0
+#define QTRACE_X86_CR1 R_CR1
+#define QTRACE_X86_CR2 R_CR2
+#define QTRACE_X86_CR3 R_CR3
+#define QTRACE_X86_CR4 R_CR4
+
+/* timestamp counter register */
+#define R_TSC 22
+#define QTRACE_X86_TSC R_TSC
 
 /// ------------------------------
 /// memory - mmu 

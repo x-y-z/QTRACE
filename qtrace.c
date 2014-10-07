@@ -218,19 +218,13 @@ void qtrace_instrument_parser(unsigned pos, ...)
       case QTRACE_MEMTRACE_STORE_VPMA:
       case QTRACE_MEMTRACE_STORE_MSIZE:
            ictxhead->iargs[ictxhead->ciarg++] = arg;
+           RESERVE_INSTRUMENT_CONTEXT_ARGUMENT(ictxhead);
            ictxhead->memfext |= arg;
            break;
       case QTRACE_REGTRACE_VALUE:
            ictxhead->iargs[ictxhead->ciarg++] = arg;
-           break;
-      case QTRACE_PCTRACE_VMA:
-           ictxhead->iargs[ictxhead->ciarg++] = arg;
-           ictxhead->pcfext |= arg;
-           break;
-      /* branch instrumentation */
-      case QTRACE_BRANCHTRACE_TARGET:
-           ictxhead->iargs[ictxhead->ciarg++] = arg;
-           ictxhead->btarget = true;
+           ictxhead->iargs[ictxhead->ciarg++] = va_arg(arguments, unsigned);
+           ++idx;
            break;
       /* process unique id instrumentation */
       case QTRACE_PROCESS_UPID:
@@ -241,6 +235,7 @@ void qtrace_instrument_parser(unsigned pos, ...)
                   QTRACE_MEMTRACE_FETCH_PREOP_VALUE :
                   QTRACE_MEMTRACE_FETCH_PSTOP_VALUE ;
            ictxhead->iargs[ictxhead->ciarg++]  = arg;
+           RESERVE_INSTRUMENT_CONTEXT_ARGUMENT(ictxhead);
            ictxhead->memfext |= arg;
            break;
       case QTRACE_MEMTRACE_STORE_VALUE:
@@ -248,13 +243,18 @@ void qtrace_instrument_parser(unsigned pos, ...)
                   QTRACE_MEMTRACE_STORE_PREOP_VALUE :
                   QTRACE_MEMTRACE_STORE_PSTOP_VALUE ;
            ictxhead->iargs[ictxhead->ciarg++]  = arg;
+           RESERVE_INSTRUMENT_CONTEXT_ARGUMENT(ictxhead);
            ictxhead->memfext |= arg;
            break;
+      case QTRACE_END_ARG:
+           goto label_end_arg;
       default:
            ictxhead->iargs[ictxhead->ciarg++] = arg;
            break;
       }
    }
+
+label_end_arg:
    va_end (arguments);          
 
    /* update last uiid */

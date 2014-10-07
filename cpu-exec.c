@@ -634,13 +634,6 @@ int cpu_exec(CPUArchState *env)
                 spin_lock(&tcg_ctx.tb_ctx.tb_lock);
                 tb = tb_find_fast(env);
 
-#if 0
-                if (tb->pc == 0x3bb2)
-                {
-                    printf("tb size is %d\n", tb->tc_end_ptr - tb->tc_ptr);
-                }
-#endif
-
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
                 if (tcg_ctx.tb_ctx.tb_invalidated_flag) {
@@ -658,8 +651,10 @@ int cpu_exec(CPUArchState *env)
                    spans two pages, we cannot safely do a direct
                    jump. */
                 if (next_tb != 0 && tb->page_addr[1] == -1) {
+#if 0 
                     tb_add_jump((TranslationBlock *)(next_tb & ~TB_EXIT_MASK),
                                 next_tb & TB_EXIT_MASK, tb);
+#endif
                 }
                 spin_unlock(&tcg_ctx.tb_ctx.tb_lock);
 
@@ -671,6 +666,10 @@ int cpu_exec(CPUArchState *env)
                 barrier();
                 if (likely(!cpu->exit_request)) {
                     tc_ptr = tb->tc_ptr;
+
+    //                if (tc_ptr == 0x7fe71ba91580)
+                 //   printf("tc_ptr is 0x%lx\n", tc_ptr);
+
                     /* execute the generated code */
                     next_tb = cpu_tb_exec(cpu, tc_ptr);
                     switch (next_tb & TB_EXIT_MASK) {

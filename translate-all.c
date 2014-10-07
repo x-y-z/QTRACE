@@ -172,6 +172,11 @@ int cpu_gen_code(CPUArchState *env, TranslationBlock *tb, int *gen_code_size_ptr
     tb->tb_next_offset[0] = 0xffff;
     tb->tb_next_offset[1] = 0xffff;
     s->tb_next_offset = tb->tb_next_offset;
+
+    /* qtrace */
+    tb->qtrace_next_offset[0] = 0;
+    tb->qtrace_next_offset[1] = 0;
+    s->qtrace_next_offset = tb->qtrace_next_offset;
 #ifdef USE_DIRECT_JUMP
     s->tb_jmp_offset = tb->tb_jmp_offset;
     s->tb_next = NULL;

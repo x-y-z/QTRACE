@@ -26,16 +26,15 @@
 /// ------------------------------------------------ ///
 /// miscellaneous 
 /// ------------------------------------------------ ///
-#define QTRACE_EXIT  exit
-#define QTRACE_ERROR printf
+#define QTRACE_EXIT             exit
+#define QTRACE_ERROR            printf
 #define QTRACE_WAIT_COMMAND_HANDLED(X)  while(!X);
-#define QTRACE_LOCAL_FUN  static
-#define QTRACE_MAX_IARGS  32 
-#define QTRACE_MAX_CALLBACK_NUM 32 
+#define QTRACE_LOCAL_FUN        static
+#define QTRACE_MAX_IARGS        256 
+#define QTRACE_MAX_CALLBACK_NUM 256
 
 #define ResetStatsNameString  "ResetStats"
 #define PrintStatsNameString  "PrintStats"
-#define QTRACE_MAX_IARGS      32
 #define SHARED_MEM_KEY        154519
 
 /// ------------------------------------------------ ///

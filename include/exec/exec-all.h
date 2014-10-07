@@ -152,6 +152,9 @@ struct TranslationBlock {
     struct TranslationBlock *page_next[2];
     tb_page_addr_t page_addr[2];
 
+    /* qtrace */
+    uintptr_t qtrace_next_offset[4];
+
     /* the following data are used to directly call another TB from
        the code of this one. */
     uint16_t tb_next_offset[2]; /* offset of original jump target */

@@ -95,8 +95,9 @@ do                                                                      \
 #define QTRACE_INSTRUMENT_CHECK_VERIFIED(s)                             \
 do                                                                      \
 {                                                                       \
-   if (!s->qtrace_verified) QTRACE_ERROR("instrument unverified\n");    \
 } while(0);
+
+  // if (!s->qtrace_verified) QTRACE_ERROR("instrument unverified\n");    \
 
 #define QTRACE_INSTRUMENT_RESET_DISASCTX(s)                             \
 do                                                                      \
@@ -106,6 +107,8 @@ do                                                                      \
 }                                                                       \
 while(0);
 
+/// QTRACE_CLIENT_MODULE - call the client plugin one-by-one to generate
+/// a list of instrumentations.
 #define QTRACE_CLIENT_MODULE(s)                                         \
 do                                                                      \
 {  /* call instruction instrumentation parsing routine */               \
@@ -116,10 +119,9 @@ do                                                                      \
 }                                                                       \
 while(0);
 
-#define QTRACE_MATERIALIZE_PREINST_INSTRUMENT(s)                       
-
-#define QTRACE_MATERIALIZE_POSTINST_INSTRUMENT(s)                      
-
+/// QTRACE_CLIENT_MODULE - generate a INDEX_op_qtrace_instrumentation 
+/// which is recognized by the TCG backend to generate the instrumentation
+/// call. 
 #define QTRACE_MATERIALIZE_INSTRUCTION_INSTRUMENT(s)                    \
 do                                                                      \
 {  /* generate the pre & post inst  instrumentation */                  \
@@ -128,34 +130,6 @@ do                                                                      \
    ictx = NULL;                                                         \
 }                                                                       \
 while(0);
-
-/// ------------------------------------------------------------- ///
-///             QTRACE PC INSTRUMENT UTILS                        ///
-/// ------------------------------------------------------------- ///
-#define QTRACE_GENERATE_PC_INSTRUMENT(pc)                              \
-do                                                                     \
-{    /* generate the pc instrumentation */                             \
-      qtrace_gen_push_pcfext_imm(pc);                                  \
-} while(0);
-
-/// ------------------------------------------------------------- ///
-///             QTRACE BRANCH INSTRUMENT UTILS                    ///
-/// ------------------------------------------------------------- ///
-#define QTRACE_BTARGET() (0)
-#define QTRACE_BRANCH_PUSH_BTARGET_TCGV(X)                             \
-do                                                                     \
-{    /* generate the branch instrumentation */                         \
-} while(0);
-
-#define QTRACE_BRANCH_PUSH_BTARGET_IM(X)                           \
-do                              \
-{    /* generate the branch instrumentation */            \
-       if (QTRACE_BTARGET())                                              \
-   {                           \
-           tcg_gen_movi_tl(cpu_tmp0, X);                              \
-           QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_tmp0);                 \
-       }                           \
-} while(0);
 
 
 #include "exec/gen-icount.h"
@@ -355,57 +329,165 @@ static void set_cc_op(DisasContext *s, CCOp op)
     s->cc_op = op;
 }
 
-static unsigned qtrace_get_register_offset(DisasContext *s, unsigned regnum)
+
+static void gen_op_sync_pc(DisasContext *s);
+
+static unsigned qtrace_get_register_size_and_offset(DisasContext *s, 
+                                                    unsigned  regnum, 
+                                                    unsigned *rmsize, 
+                                                    unsigned *offset)
 {
     switch(regnum)
     {
-    case regnum >= R_EAX || regnum <= R_R15 :
-        /* general purpose register */
-        return offsetof(CPUX86State, regs[regnum]);
+    /* general purpose register */
+	case R_EAX : 
+	case R_ECX :
+	case R_EDX :
+	case R_EBX :
+	case R_ESP :
+	case R_EBP :
+	case R_ESI :
+	case R_EDI :
+	case R_R8  :
+	case R_R9  : 
+	case R_R10 :
+	case R_R11 :
+	case R_R12 :
+	case R_R13 :
+	case R_R14 :
+	case R_R15 :
+         *rmsize = sizeof(target_ulong)*8;
+         *offset = offsetof(CPUX86State, regs[regnum]);
+         break;
+    /* program counter register */
+    case R_RIP :
+         *rmsize = sizeof(target_ulong)*8;
+         *offset = offsetof(CPUX86State, eip);
+         break;
+    /* control register */
+    case R_CR0 :
+    case R_CR1 :
+    case R_CR2 :
+    case R_CR3 :
+    case R_CR4 :
+         *rmsize = sizeof(target_ulong)*8;
+         *offset = offsetof(CPUX86State, cr[regnum-R_RIP-1]);
+         break;
+    case R_TSC:
+         *rmsize = sizeof(uint64_t)*8;
+         *offset = offsetof(CPUX86State, tsc);
+         break;
     default:
         break;
     }
     return 0;
 }
 
-/// @ qtrace_interpret_instrument_requirements - this function sets up
-/// @ the necessary IRs to shadow for pre-instruction instrumentation.
+/// @ qtrace_interpret_instrument_requirements - this function is called before any
+/// @ emulation IR is generated. It does a few things.
+/// @ 1 - this function sets up the necessary IRs to shadow register for 
+/// @ pre-instruction instrumentation.
+/// @ 2 - this function sets up the necessary IRs to shadow memory for 
+/// @ pre-instruction instrumentation.
+/// @ 3 - this function synchronize the program counter if it is instrumented. 
+/// 
 static void qtrace_interpret_instrument_requirements(DisasContext *s)
 {
+#define OFS(x) offsetof(CPUArchState, x);
     InstrumentContext *icontext = qtrace_get_current_icontext_list();
     if (icontext)
     {
         unsigned idx = 0, ciarg = icontext->ciarg;
-        unsigned regidx = 0, offset = 0;
-        for(idx = 0; idx<ciarg; ++idx)
+        unsigned regidx = 0, offset = 0, rmsize = 0;
+        while(idx<ciarg)
         {
             switch(icontext->iargs[idx])
             {
+            /// ---------------------------------- ///
+            /// register trace
+            /// ---------------------------------- ///
             case QTRACE_REGTRACE_VALUE:
                  regidx = icontext->iargs[++idx];
-                 offset = qtrace_get_register_offset(s, regidx);
-                 tcg_gen_op1i(INDEX_op_qtrace_shadow_register, offset);
+                 qtrace_get_register_size_and_offset(s, regidx, &rmsize, &offset);
+                 /* synchronize the pc if instrumenting it */
+                 //if (regidx == R_RIP) gen_op_sync_pc(s); 
+                 /* create a register shadow if preinst instrumentation */
+                 if (QTRACE_PREINST(icontext))
+                 {
+                    tcg_gen_op2i(INDEX_op_qtrace_shadow_register, rmsize, offset);
+                 }
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = offset;
                  break;
-            case QTRACE_MEMTRACE_FETCH_VMA   :
-            case QTRACE_MEMTRACE_FETCH_PMA   :
-            case QTRACE_MEMTRACE_FETCH_VPMA  :
-            case QTRACE_MEMTRACE_FETCH_MSIZE :
-            case QTRACE_MEMTRACE_STORE_VMA   :
-            case QTRACE_MEMTRACE_STORE_PMA   :
-            case QTRACE_MEMTRACE_STORE_VPMA  :
-            case QTRACE_MEMTRACE_STORE_MSIZE :
-            case QTRACE_MEMTRACE_FETCH_PREOP_VALUE :
-            case QTRACE_MEMTRACE_STORE_PREOP_VALUE :
-            case QTRACE_MEMTRACE_FETCH_PSTOP_VALUE :
-            case QTRACE_MEMTRACE_STORE_PSTOP_VALUE :
-                 s->instrument_memory |= icontext->iargs[idx];
+            /// ---------------------------------- ///
+            /// memory trace
+            /// ---------------------------------- ///
+            case QTRACE_MEMTRACE_FETCH_VMA:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(fetch_shadow.vaddr);
+                 break;
+            case QTRACE_MEMTRACE_FETCH_PMA:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(fetch_shadow.paddr);
+                 break;
+            case QTRACE_MEMTRACE_FETCH_MSIZE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(fetch_shadow.bsize);
+                 break;
+            case QTRACE_MEMTRACE_FETCH_PREOP_VALUE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(fetch_shadow.prevalue);
+                 break;
+            case QTRACE_MEMTRACE_FETCH_PSTOP_VALUE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(fetch_shadow.pstvalue);
+                 break;
+            case QTRACE_MEMTRACE_STORE_VMA:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(store_shadow.vaddr);
+                 break;
+            case QTRACE_MEMTRACE_STORE_PMA:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(store_shadow.paddr);
+                 break;
+            case QTRACE_MEMTRACE_STORE_MSIZE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(store_shadow.bsize);
+                 break;
+            case QTRACE_MEMTRACE_STORE_PREOP_VALUE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(store_shadow.prevalue);
+                 break;
+            case QTRACE_MEMTRACE_STORE_PSTOP_VALUE:
+                 s->instrument_memory |= icontext->iargs[idx++];
+                 /* override with frontend specific offset */
+                 icontext->iargs[idx] = OFS(store_shadow.pstvalue);
+                 break;
+            /// ---------------------------------- ///
+            /// process ID trace.
+            /// ---------------------------------- ///
+            case QTRACE_PROCESS_UPID:
+                 /* use CR[3] as the UPID on X86 */
+                 /* override with frontend specific offset */
+                 icontext->iargs[++idx] = OFS(cr[3]);
                  break;
             default:
                  break;
-            }
+            } 
+            ++idx;
         }
     }
     return;
+#undef OFS
 }
 
 static void gen_update_cc_op(DisasContext *s)
@@ -636,6 +718,13 @@ static inline void gen_op_addl_T0_T1(void)
 static inline void gen_op_jmp_T0(void)
 {
     tcg_gen_st_tl(cpu_T[0], cpu_env, offsetof(CPUX86State, eip));
+}
+
+static void gen_op_sync_pc(DisasContext *s)
+{
+    target_ulong curr_eip = s->pc_start - s->cs_base;
+    gen_movtl_T0_im(curr_eip);
+    gen_op_jmp_T0();
 }
 
 static inline void qtrace_gen_push_pcfext_imm(target_ulong pc)
@@ -1055,15 +1144,9 @@ static inline void gen_movs(DisasContext *s, int ot)
     
     gen_op_st_T0_A0(ot + s->mem_index, s);
 
-    /* QTRACE - generate the pre-inst instrumentation */
-    QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
     gen_op_movl_T0_Dshift(ot);
     gen_op_add_reg_T0(s->aflag, R_ESI);
     gen_op_add_reg_T0(s->aflag, R_EDI);
-
-    /* QTRACE - generate the post-inst instrumentation */
-    QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
 }
 
 static void gen_op_update1_cc(void)
@@ -2602,13 +2685,7 @@ static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
     pc = s->cs_base + eip;
     tb = s->tb;
 
-    /* QTRACE - generate the pre-inst instrumentation */
-    QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
     gen_jmp_im(eip);
-
-    /* QTRACE - generate the pre-inst instrumentation */
-    QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
 
     /* NOTE: we handle the case where the TB spans two pages here */
     if ((pc & TARGET_PAGE_MASK) == (tb->pc & TARGET_PAGE_MASK) ||
@@ -2630,10 +2707,8 @@ static inline void gen_jcc(DisasContext *s, int b,
     if (s->jmp_opt) {
         l1 = gen_new_label();
         gen_jcc1(s, b, l1);
-        /* instrumentation materialized in gen_goto_tb */
         gen_goto_tb(s, 0, next_eip);
         gen_set_label(l1);
-        /* instrumentation materialized in gen_goto_tb */
         gen_goto_tb(s, 1, val);
         s->is_jmp = DISAS_TB_JUMP;
     } else {
@@ -2641,25 +2716,11 @@ static inline void gen_jcc(DisasContext *s, int b,
         l2 = gen_new_label();
         gen_jcc1(s, b, l1);
 
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         gen_jmp_im(next_eip);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
         tcg_gen_br(l2);
 
         gen_set_label(l1);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         gen_jmp_im(val);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
 
         gen_set_label(l2);
         gen_eob(s);
@@ -5212,18 +5273,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         case 0: /* test */
             val = insn_get(env, s, ot);
             gen_op_movl_T1_im(val);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
             gen_op_testl_T0_T1_cc();
             set_cc_op(s, CC_OP_LOGICB + ot);
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-            /* QTRACE - verified */
-            QTRACE_INSTRUMENT_VERIFIED(s);
             break;
         case 2: /* not */
             tcg_gen_not_tl(cpu_T[0], cpu_T[0]);
@@ -5234,21 +5285,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 //QTRACE_CLIENT_MODULE(s);
       
                 gen_op_st_T0_A0(ot + s->mem_index, s);
-
-                /* QTRACE - generate the pre and post-inst instrumentation */
-                QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-                QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
             } else {
                 /* QTRACE - done parsing instruction property */
                 //QTRACE_CLIENT_MODULE(s);
-
-                /* QTRACE - generate the pre-inst instrumentation */
-                QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
                 gen_op_mov_reg_T0(ot, rm);
-
-                /* QTRACE - generate the post-inst instrumentation */
-                QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
             }
 
             /* QTRACE - verified */
@@ -5263,23 +5303,12 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 //QTRACE_CLIENT_MODULE(s);
 
                 gen_op_st_T0_A0(ot + s->mem_index, s);
-
-                /* QTRACE - generate the pre-inst instrumentation */
-                QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
             } else {
-                /* QTRACE - generate the pre-inst instrumentation */
-                QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
                 gen_op_mov_reg_T0(ot, rm);
             }
 
             gen_op_update_neg_cc();
             set_cc_op(s, CC_OP_SUBB + ot);
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-            /* QTRACE - verified */
-            QTRACE_INSTRUMENT_VERIFIED(s);
             break;
         case 4: /* mul */
             switch(ot) {
@@ -5489,31 +5518,14 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_op_andl_T0_ffff();
             next_eip = s->pc - s->cs_base;
             gen_movtl_T1_im(next_eip);
-
-       /* QTRACE. get branch target */
-            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[1]);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
             gen_push_T1(s);
             gen_op_jmp_T0();
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
             gen_eob(s);
             break;
         case 3: /* lcall Ev */
             gen_op_ld_T1_A0(ot + s->mem_index, s);
             gen_add_A0_im(s, 1 << (ot - OT_WORD + 1));
             gen_op_ldu_T0_A0(OT_WORD + s->mem_index, s);
-
-       /* FIXME-XIN-TONG. right ? QTRACE. get branch target */
-            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
         do_lcall:
             if (s->pe && !s->vm86) {
                 gen_update_cc_op(s);
@@ -5528,31 +5540,18 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                                       tcg_const_i32(dflag),
                                       tcg_const_i32(s->pc - s->cs_base));
             }
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
             gen_eob(s);
             break;
         case 4: /* jmp Ev */
             /* QEMU does not optimize indirect jump */
-            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP | QTRACE_IS_INDIRECT);
-            ///QTRACE_CLIENT_MODULE(s);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_INDIRECT);
+            QTRACE_CLIENT_MODULE(s);
 
             if (s->dflag == 0)
                 gen_op_andl_T0_ffff();
 
-            /* QTRACE. get branch target */
-            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
             gen_op_jmp_T0();
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
             gen_eob(s);
             break;
         case 5: /* ljmp Ev */
@@ -5562,12 +5561,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_op_ld_T1_A0(ot + s->mem_index, s);
             gen_add_A0_im(s, 1 << (ot - OT_WORD + 1));
             gen_op_ldu_T0_A0(OT_WORD + s->mem_index, s);
-
-            /* QTRACE. get branch target */
-            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
         do_ljmp:
             if (s->pe && !s->vm86) {
                 gen_update_cc_op(s);
@@ -5580,9 +5573,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 gen_op_movl_T0_T1();
                 gen_op_jmp_T0();
             }
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
             gen_eob(s);
             break;
         case 6: /* push Ev */
@@ -5835,15 +5825,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
         gen_op_mov_TN_reg(OT_LONG, 0, (b & 7) | REX_B(s));
         gen_push_T0(s);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-        /* QTRACE - verified */
-        QTRACE_INSTRUMENT_VERIFIED(s);
         break;
     case 0x58 ... 0x5f: /* pop */
         if (CODE64(s)) {
@@ -5856,19 +5837,9 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         //QTRACE_CLIENT_MODULE(s);
 
         gen_pop_T0(s);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         /* NOTE: order is important for pop %sp */
         gen_pop_update(s);
         gen_op_mov_reg_T0(ot, (b & 7) | REX_B(s));
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-        /* QTRACE - verified */
-        QTRACE_INSTRUMENT_VERIFIED(s);
         break;
     case 0x60: /* pusha */
         if (CODE64(s))
@@ -6010,16 +5981,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
         /* generate a generic store */
         gen_ldst_modrm(env, s, modrm, ot, reg, 1);
-
-        /* QTRACE - generate the pre-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-        /* QTRACE - verified */
-        QTRACE_INSTRUMENT_VERIFIED(s);
-
         break;
     case 0xc6:
     case 0xc7: /* mov Ev, Iv */
@@ -6046,12 +6007,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         gen_op_movl_T0_im(val);
         if (mod != 3) {
             gen_op_st_T0_A0(ot + s->mem_index, s);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
         }
         else
             gen_op_mov_reg_T0(ot, (modrm & 7) | REX_B(s));
@@ -6065,7 +6020,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         /* Move r/m16 to r16. */
         /* Move r/m32 to r32. */
         /* Move r/m64 to r64. */
-        /* XIN */
+        /* IMPLEMENTING */
         if ((b & 1) == 0)
             ot = OT_BYTE;
         else
@@ -6081,8 +6036,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
         gen_op_mov_reg_T0(ot, reg);
 
-        /* QTRACE - generate the instruction instrumentation */
-        QTRACE_MATERIALIZE_INSTRUCTION_INSTRUMENT(s);
 
         /* QTRACE - verified */
         QTRACE_INSTRUMENT_VERIFIED(s);
@@ -7218,19 +7171,12 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         s->pc += 2;
         gen_pop_T0(s);
 
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         if (CODE64(s) && s->dflag)
             s->dflag = 2;
         gen_stack_update(s, val + (2 << s->dflag));
         if (s->dflag == 0)
             gen_op_andl_T0_ffff();
         gen_op_jmp_T0();
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
         gen_eob(s);
 
         /* QTRACE - verified */
@@ -7242,18 +7188,10 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         //QTRACE_CLIENT_MODULE(s);
 
         gen_pop_T0(s);
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
         gen_pop_update(s);
         if (s->dflag == 0)
             gen_op_andl_T0_ffff();
         gen_op_jmp_T0();
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
         gen_eob(s);
 
         /* QTRACE - verified */
@@ -7284,10 +7222,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             /* add stack offset */
             gen_stack_update(s, val + (4 << s->dflag));
         }
-
-        /* QTRACE - generate the post-inst instrumentation */
-        QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
         gen_eob(s);
         break;
     case 0xcb: /* lret */
@@ -7335,19 +7269,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_movtl_T0_im(next_eip);
             gen_push_T0(s);
             gen_jmp_im(tval);
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-
-            /* QTRACE - generate the post-inst instrumentation */
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-            /*FIXME-XIN-TONG. we do not need gen_eob. */
-            ///gen_jmp(s, tval);
-            gen_eob(s);
-
-            /* QTRACE - verified */
-            QTRACE_INSTRUMENT_VERIFIED(s);
+            gen_jmp(s, tval);
         }
         break;
     case 0x9a: /* lcall im */
@@ -7364,12 +7286,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
             gen_op_movl_T0_im(selector);
             gen_op_movl_T1_imu(offset);
-
-       /* FIXME-XIN-TONG. right ? QTRACE. get branch target */
-            QTRACE_BRANCH_PUSH_BTARGET_TCGV(cpu_T[0]);
-
-            /* QTRACE - generate the pre-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
         }
         goto do_lcall;
     case 0xe9: /* jmp im */
@@ -7385,12 +7301,13 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             tval &= 0xffff;
         else if(!CODE64(s))
             tval &= 0xffffffff;
-
-        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jmp(s, tval);
         break;
     case 0xea: /* ljmp im */
         {
+            QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
+            QTRACE_CLIENT_MODULE(s);
+
             unsigned int selector, offset;
 
             if (CODE64(s))
@@ -7404,26 +7321,28 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         }
         goto do_ljmp;
     case 0xeb: /* jmp Jb */
+        /* IMPLEMENTING */
         QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
-        ///QTRACE_CLIENT_MODULE(s);
+        QTRACE_CLIENT_MODULE(s);
 
         tval = (int8_t)insn_get(env, s, OT_BYTE);
         tval += s->pc - s->cs_base;
         if (s->dflag == 0)
             tval &= 0xffff;
-
-        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jmp(s, tval);
         break;
     case 0x70 ... 0x7f: /* jcc Jb */
-        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
-        //QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_COND);
+        QTRACE_CLIENT_MODULE(s);
 
         tval = (int8_t)insn_get(env, s, OT_BYTE);
         goto do_jcc;
     case 0x180 ... 0x18f: /* jcc Jv */
-        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP & QTRACE_IS_COND);
-        //QTRACE_CLIENT_MODULE(s);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_JMP);
+        QTRACE_ADD_INST_TYPE_FLAG(s, QTRACE_IS_COND);
+        QTRACE_CLIENT_MODULE(s);
+
         if (dflag) {
             tval = (int32_t)insn_get(env, s, OT_LONG);
         } else {
@@ -7434,11 +7353,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         tval += next_eip;
         if (s->dflag == 0)
             tval &= 0xffff;
-
-        QTRACE_BRANCH_PUSH_BTARGET_IM(tval);
         gen_jcc(s, b, tval, next_eip);
         break;
-
     case 0x190 ... 0x19f: /* setcc Gv */
         modrm = cpu_ldub_code(env, s->pc++);
         gen_setcc1(s, b, cpu_T[0]);
@@ -7468,13 +7384,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_update_cc_op(s);
             gen_helper_read_eflags(cpu_T[0], cpu_env);
             gen_push_T0(s);
-
-            /* QTRACE - generate the pre and post-inst instrumentation */
-            QTRACE_MATERIALIZE_PREINST_INSTRUMENT();
-            QTRACE_MATERIALIZE_POSTINST_INSTRUMENT();
-
-            /* QTRACE - verified */
-            QTRACE_INSTRUMENT_VERIFIED(s);
         }
         break;
     case 0x9d: /* popf */
@@ -8996,6 +8905,9 @@ static inline void gen_intermediate_code_internal(X86CPU *cpu,
         QTRACE_INSTRUMENT_VERIFIED(dc);
 
         pc_ptr = disas_insn(env, dc, pc_ptr);
+
+        /* QTRACE - generate the instrumentation */
+        QTRACE_MATERIALIZE_INSTRUCTION_INSTRUMENT(dc);
 
         QTRACE_INSTRUMENT_CHECK_VERIFIED(dc);
 

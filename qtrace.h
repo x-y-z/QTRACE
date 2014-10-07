@@ -89,33 +89,39 @@
 #define QTRACE_SUB_INST_TYPE_FLAG(s,flg)            (s->qtrace_insnflags&=~(flg))
 #define QTRACE_ADD_COND_INST_TYPE_FLAG(s,flg,c)     {if(c) QTRACE_ADD_INST_TYPE_FLAG(s, flg);}
 #define QTRACE_SUB_COND_INST_TYPE_FLAG(s,flg,c)     {if(c) QTRACE_SUB_INST_TYPE_FLAG(s, flg);}
+#define RESERVE_INSTRUMENT_CONTEXT_ARGUMENT(ictx)   {ictx->iargs[ictx->ciarg++] = 0;}
 
 /// ------------------------------------------- 
 /// general facility.
 /// ------------------------------------------- 
+#define QTRACE_MAX_ARGS                             (128)
 #define QTRACE_IFUN                                 (1<<0)
 #define QTRACE_IPOINT_BEFORE                        (1<<1)
 #define QTRACE_IPOINT_AFTER                         (1<<2)
 #define QTRACE_PROCESS_UPID                         (1<<3)
+#define QTRACE_BEGIN_ARG                            QTRACE_MAX_ARGS
+#define QTRACE_END_ARG                              (1<<4)
+#define QTRACE_PREINST(ictx)                        (ictx->ipoint == QTRACE_IPOINT_BEFORE)
+#define QTRACE_PSTINST(ictx)                        (ictx->ipoint == QTRACE_IPOINT_AFTER)
 
 /// ------------------------------------------- 
 /// memory tracing.
 /// ------------------------------------------- 
-#define QTRACE_MEMTRACE_FETCH_VMA                   (1<<4)
-#define QTRACE_MEMTRACE_FETCH_PMA                   (1<<5) 
-#define QTRACE_MEMTRACE_FETCH_MSIZE                 (1<<6)     
-#define QTRACE_MEMTRACE_FETCH_VALUE                 (1<<7)     
+#define QTRACE_MEMTRACE_FETCH_VMA                   (1<<5)
+#define QTRACE_MEMTRACE_FETCH_PMA                   (1<<6) 
+#define QTRACE_MEMTRACE_FETCH_MSIZE                 (1<<7)     
+#define QTRACE_MEMTRACE_FETCH_VALUE                 (1<<8)     
 #define QTRACE_MEMTRACE_FETCH_VPMA                  (QTRACE_MEMTRACE_FETCH_VMA | QTRACE_MEMTRACE_FETCH_PMA)
-#define QTRACE_MEMTRACE_STORE_VMA                   (1<<8)
-#define QTRACE_MEMTRACE_STORE_PMA                   (1<<9) 
-#define QTRACE_MEMTRACE_STORE_MSIZE                 (1<<10)     
-#define QTRACE_MEMTRACE_STORE_VALUE                 (1<<11)     
+#define QTRACE_MEMTRACE_STORE_VMA                   (1<<9)
+#define QTRACE_MEMTRACE_STORE_PMA                   (1<<10) 
+#define QTRACE_MEMTRACE_STORE_MSIZE                 (1<<11)     
+#define QTRACE_MEMTRACE_STORE_VALUE                 (1<<12)     
 #define QTRACE_MEMTRACE_STORE_VPMA                  (QTRACE_MEMTRACE_STORE_VMA | QTRACE_MEMTRACE_STORE_PMA)
 /* 4 internal values */
-#define QTRACE_MEMTRACE_FETCH_PREOP_VALUE           (1<<12)
-#define QTRACE_MEMTRACE_FETCH_PSTOP_VALUE           (1<<13)
-#define QTRACE_MEMTRACE_STORE_PREOP_VALUE           (1<<14)
-#define QTRACE_MEMTRACE_STORE_PSTOP_VALUE           (1<<15)
+#define QTRACE_MEMTRACE_FETCH_PREOP_VALUE           (1<<13)
+#define QTRACE_MEMTRACE_FETCH_PSTOP_VALUE           (1<<14)
+#define QTRACE_MEMTRACE_STORE_PREOP_VALUE           (1<<15)
+#define QTRACE_MEMTRACE_STORE_PSTOP_VALUE           (1<<16)
 
 /* shift away from the last N bits. they are used by QEMU */
 #define QTRACE_MEMTRACE_BITS                        ((int)(ceil(log2(NB_MMU_MODES)))) 
@@ -170,19 +176,19 @@
 /// ------------------------------------------- 
 /// register tracing.
 /// ------------------------------------------- 
-#define QTRACE_REGTRACE_VALUE                       (1<<16)
+#define QTRACE_REGTRACE_VALUE                       (1<<17)
 
 /// ------------------------------------------- 
 /// branch tracing.
 /// ------------------------------------------- 
-#define QTRACE_BRANCHTRACE_TARGET                   (1<<17)   
-#define QTRACE_BRANCHTRACE_TAKEN                    (1<<18)   
-#define QTRACE_BRANCHTRACE_NOTTAKEN                 (1<<19)   
+#define QTRACE_BRANCHTRACE_TARGET                   (1<<18)   
+#define QTRACE_BRANCHTRACE_TAKEN                    (1<<19)   
+#define QTRACE_BRANCHTRACE_NOTTAKEN                 (1<<20)   
 
 /// ------------------------------------------- 
 /// program counter tracing.
 /// ------------------------------------------- 
-#define QTRACE_PCTRACE_VMA                          (1<<20)
+#define QTRACE_PCTRACE_VMA                          (1<<21)
 
 /// ------------------------------------------------ ///
 /// instrumentation prototypes. 
